@@ -341,7 +341,7 @@ function collect_system_info() {
        # The multiple sed statements strip out leading / trailing lines
        # and concatenate on the same line where multiple directories are
        # configured to allow Nibbler to read it as a csv line
-       DATA_CONF=$(cat $CONF_DIR/cassandra.yaml | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
+       DATA_CONF=$(cat $CONF_DIR/cassandra.yaml | sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
        COMMITLOG_CONF=$(cat $CONF_DIR/cassandra.yaml | sed -n "/^commitlog_directory:/,/^$/p" | grep -v -E "^$" | awk '{print $2}')
        # Checks the data and commitlog variables are set. If not then
        # read the JVM variable cassandra.storagedir and append paths as

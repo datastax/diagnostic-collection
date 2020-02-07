@@ -120,7 +120,7 @@ function set_paths {
     else
         TMP_DIR=/var/tmp/diag.$$
     fi
-    echo "TMP_DIR=${TMP_DIR}"
+    mkdir -p $TMP_DIR
 
     # log paths
     if [ -z "$LOG_DIR" ] && [ -n "$IS_PACKAGE" ]; then 
@@ -128,7 +128,6 @@ function set_paths {
     elif [ -z "$LOG_DIR" ] && [ -n "$IS_TARBALL" ]; then
         LOG_DIR=$ROOT_DIR/logs
     fi
-    echo "LOG_DIR=${LOG_DIR}"
  
     # config paths
     if [ -z "$CONF_DIR" ]; then
@@ -149,8 +148,6 @@ function set_paths {
             CONF_DIR=/etc/cassandra
         fi
     fi
-    echo "CONF_DIR=${CONF_DIR}"
-    echo "DSE_CONF_DIR=${CONF_DIR}"
 
     # binary paths
     # DDAC
@@ -162,7 +159,7 @@ function set_paths {
             BIN_DIR=$ROOT_DIR/bin
             # COSS tarball
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
-            BIN_DIR=$ROOT_DIR/cassandra/bin
+            BIN_DIR=$ROOT_DIR/bin
             # DSE package
         elif [ -n "$IS_PACKAGE" ] && [ -n "$IS_DSE" ]; then
             BIN_DIR=/usr/bin
@@ -171,6 +168,18 @@ function set_paths {
             BIN_DIR=/usr/bin
         fi
     fi
+
+    echo "CONF_DIR=${CONF_DIR}"
+    echo "DSE_CONF_DIR=${DSE_CONF_DIR}"
+    echo "BIN_DIR=${CONF_DIR}"
+    echo "LOG_DIR=${LOG_DIR}"
+    echo "TMP_DIR=${TMP_DIR}"
+
+    [[ -d "$CONF_DIR" ]] || { echo "Missing CONF_DIR"; exit 1; }
+    [[ -z "${DSE_CONF_DIR}" || -d "$DSE_CONF_DIR" ]] || { echo "Missing DSE_CONF_DIR"; exit 1; }
+    [[ -d "$BIN_DIR" ]] || { echo "Missing BIN_DIR"; exit 1; }
+    [[ -d "$LOG_DIR" ]] || { echo "Missing LOG_DIR"; exit 1; }
+    [[ -d "$TMP_DIR" ]] || { echo "Missing TMP_DIR"; exit 1; }
 }
 
 function detect_install {

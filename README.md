@@ -7,8 +7,9 @@ Generation of diagnostic tarball for DSE/DDAC consists of 2 parts:
 2. Merging all data into single file
 
 These 2 steps are separate because admins are using different ways to access nodes in the
-cluster, and transferring the data. We're providing the sample script that allows to
-perform the data collection from nodes - see description of the `collect_diag.sh` script.
+cluster, and transferring the data.  We're providing the sample script that allows to
+perform the data collection from cluster nodes - see description of the `collect_diag.sh`
+script.
 
 ## Collecting diagnostic on individual nodes
 
@@ -115,8 +116,9 @@ Or for DDAC:
   /usr/local/lib/cassandra
 ```
 
-```
-./collect_diag.sh -t ddac -f mhosts3 -r -s \
-  "-i ~/.automaton/nebula/alexey.ott/SJC/sales-sandbox/ddactest/private_key -o StrictHostKeyChecking=no -o User=automaton" \
-  /usr/local/lib/cassandra
+if it's running on the machine with DSE/DDAC/C*, then it could be as simple as, as it will
+use `nodetool status` to obtain a list of nodes:
+
+```sh
+./collect_diag.sh -t ddac -r /usr/local/lib/cassandra
 ```

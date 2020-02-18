@@ -7,7 +7,6 @@
 
 DSE_PATTERN="diag"
 INS_PATTERN="dse-insights"
-DDAC_PATTERN="ddac-diag"
 PATTERN=$DSE_PATTERN
 OUT_DIR="/var/tmp"
 # size of insights file chunk, in Mb
@@ -29,10 +28,10 @@ function usage() {
 RES_FILE=""
 INSIGHTS=""
 REMOVE_FILES=""
-IS_DDAC=""
-TYPE=""
+TYPE="dse"
+VERBOSE=""
 
-while getopts ":hiwrf:p:o:t:" opt; do
+while getopts ":hvirf:p:o:t:" opt; do
     case $opt in
         f) RES_FILE=$OPTARG
            ;;
@@ -47,15 +46,18 @@ while getopts ":hiwrf:p:o:t:" opt; do
            ;;
         t) TYPE=$OPTARG
            ;;
-        w) IS_DDAC="true"
-           PATTERN=$DDAC_PATTERN
+        v) VERBOSE=true
            ;;
         h) usage
            exit 0
            ;;
+        *) echo "Unknown flag '$opt'"
+           usage
+           exit 1
+           ;;
     esac
 done
-shift "$(($OPTIND -1))"
+shift "$((OPTIND -1))"
 
 
 DIAGS_DIR=$1
@@ -64,23 +66,23 @@ if [ -z "$DIAGS_DIR" ]; then
     exit 1
 fi
 
-if [ ! -d $DIAGS_DIR ]; then
+if [ ! -d "$DIAGS_DIR" ]; then
     echo "Specified directory '$DIAGS_DIR' doesn't exist!"
     usage
     exit 1
 fi
 
-OLDWD="`pwd`"
+OLDWD="$(pwd)"
 TMPDIR=$OUT_DIR/diag.$$
 if ! echo "$DIAGS_DIR"|grep -e '^/' > /dev/null ; then
 #    echo "relative diags directory! adjusting..."
     DIAGS_DIR="$OLDWD/$DIAGS_DIR"
 fi
 
-DFILES="`ls $DIAGS_DIR/${PATTERN}-*.tar.gz 2>/dev/null`"
+DFILES="$(ls "$DIAGS_DIR"/${PATTERN}-*.tar.gz 2>/dev/null)"
 if [ -z "$DFILES" ]; then
     if [ "$PATTERN" = "$DSE_PATTERN" ]; then
-        DFILES="`ls $DIAGS_DIR/${INS_PATTERN}-*.tar.gz 2>/dev/null`"
+        DFILES="$(ls "$DIAGS_DIR"/${INS_PATTERN}-*.tar.gz 2>/dev/null)"
         INSIGHTS="true"
     fi
     if [ -z "$DFILES" ]; then
@@ -91,9 +93,9 @@ if [ -z "$DFILES" ]; then
 fi
 
 FILE_TYPE=diagnostics
-mkdir -p $TMPDIR/cluster/nodes
-cd $TMPDIR/cluster/nodes
-for i in $DIAGS_DIR/${PATTERN}-*.tar.gz; do
+mkdir -p "$TMPDIR/cluster/nodes"
+cd "$TMPDIR/cluster/nodes" || exit
+for i in "$DIAGS_DIR"/${PATTERN}-*.tar.gz; do
     tar zxf "$i"
     if [ -n "$REMOVE_FILES" ]; then
         rm -f "$i"
@@ -101,28 +103,25 @@ for i in $DIAGS_DIR/${PATTERN}-*.tar.gz; do
 done
 
 if [ -z "$INSIGHTS" ]; then # processing just DSE diagnostic
-    CLUSTER_NAME="`cat */conf/cassandra/cassandra.yaml|grep -e '^cluster_name: '|sed -e "s|^cluster_name:[ ]*\([^ ]*\).*\$|\1|"|tr -d "'"|head -n 1|tr ' ' '_'`"
-    #COLLECT_DATE="`cat */collect_date|sort|tail -n 1`"
-    COLLECT_DATE=$(date '+%Y-%m-%d_%H:%M:%S')
+    CLUSTER_NAME="$(cat -- */conf/cassandra/cassandra.yaml|grep -e '^cluster_name: '|sed -e "s|^cluster_name:[ ]*\([^ ]*\).*\$|\1|"|tr -d "'"|head -n 1|tr ' ' '_')"
+    COLLECT_DATE="$(date '+%Y-%m-%d_%H_%M_%S')"
     echo "Cluster name='$CLUSTER_NAME' collected at $COLLECT_DATE"
 
     # Remove sensitive data
     BACKUP_SUFFIX=".bak"
-    OSTYPE=`uname -s`
+    OSTYPE="$(uname -s)"
     if [ "$OSTYPE" = "Darwin" ]; then
         BACKUP_SUFFIX=" .bak"
     fi
-    sed -i${BACKUP_SUFFIX} -e 's|^\(.*password: \).*$|\1redacted|' */conf/cassandra/cassandra.yaml
-    if [ "$TYPE" = "ddac" ] || [ "$TYPE" = "dse" ]; then # DSE and DDAC
-        sed -i${BACKUP_SUFFIX} -e 's|^\(.*password: \).*$|\1redacted|' */conf/dse/dse.yaml */conf/cassandra/cassandra.yaml
-    else # COSS
-        sed -i${BACKUP_SUFFIX} -e 's|^\(.*password: \).*$|\1redacted|' */conf/cassandra/cassandra.yaml
+    sed -i${BACKUP_SUFFIX} -e 's|^\(.*password: \).*$|\1redacted|' -- */conf/cassandra/cassandra.yaml
+    sed -i${BACKUP_SUFFIX} -e 's|^\(.*StorePassword=\).*\(".*\)$|\1redacted\2|' -- */conf/cassandra/cassandra-env.sh
+    if [ "$TYPE" = "dse" ]; then # DSE
+        sed -i${BACKUP_SUFFIX} -e 's|^\(.*password: \).*$|\1redacted|' -- */conf/dse/dse.yaml
     fi
-    sed -i${BACKUP_SUFFIX} -e 's|^\(.*StorePassword=\).*\(".*\)$|\1redacted\2|' */conf/cassandra/cassandra-env.sh
     find . -name \*.bak -print0 |xargs -0 rm -f
 
     # Pack everything together
-    cd $TMPDIR
+    cd "$TMPDIR" || exit
     CL_DIR="${CLUSTER_NAME}-${FILE_TYPE}-${COLLECT_DATE}"
     mv cluster "$CL_DIR"
     
@@ -133,41 +132,41 @@ if [ -z "$INSIGHTS" ]; then # processing just DSE diagnostic
     tar zcf "$RES_FILE" "$CL_DIR"
     echo "Complete $FILE_TYPE tarball is in $RES_FILE"
 else # processing insights
-    cd $TMPDIR
+    cd "$TMPDIR" || exit
     FILE_TYPE=insights
     mv cluster/nodes/* cluster/
     rmdir cluster/nodes
-    GZ_FILE=`find cluster -name \*.gz|head -n 1`
-    GZ_LINE="`gzip -dc $GZ_FILE|cut -b 6-|grep -a '"cluster":"'|grep -a '"timestamp":'|head -n 1`"
-    CLUSTER_NAME="`echo "$GZ_LINE"|sed -e 's|^.*"cluster":"\([^"]*\)".*$|\1|'|tr ' ' '_'`"
-    COLLECT_DATE="`echo "$GZ_LINE"|sed -e 's|^.*"timestamp":\([^,]*\),.*$|\1|'`"
+    GZ_FILE="$(find cluster -name \*.gz|head -n 1)"
+    GZ_LINE="$(gzip -dc "$GZ_FILE"|cut -b 6-|grep -a '"cluster":"'|grep -a '"timestamp":'|head -n 1)"
+    CLUSTER_NAME="$(echo "$GZ_LINE"|sed -e 's|^.*"cluster":"\([^"]*\)".*$|\1|'|tr ' ' '_')"
+    COLLECT_DATE="$(echo "$GZ_LINE"|sed -e 's|^.*"timestamp":\([^,]*\),.*$|\1|'|tr ':' '_')"
 
     # Pack everything together, splitting into chunks if required
-    cd $TMPDIR
+    cd "$TMPDIR" || exit
     file_num=0
 #    set -x
-    num_dirs_left=`find cluster -maxdepth 2 -mindepth 1 -type d|wc -l`
+    num_dirs_left="$(find cluster -maxdepth 2 -mindepth 1 -type d|wc -l)"
     ORIG_RES_FILE="$RES_FILE"
-    while [ $num_dirs_left -gt 0 ] ; do
+    while [ "$num_dirs_left" -gt 0 ] ; do
         CL_DIR="${CLUSTER_NAME}-${FILE_TYPE}-${COLLECT_DATE}-${file_num}"
         mkdir "$CL_DIR"
-        while `true` ; do
-            num_dirs_left=`find cluster -maxdepth 2 -mindepth 1 -type d|wc -l`
-            cl_size=`du -ms "$CL_DIR"|cut -f 1`
+        while true ; do
+            num_dirs_left="$(find cluster -maxdepth 2 -mindepth 1 -type d|wc -l)"
+            cl_size="$(du -ms "$CL_DIR"|cut -f 1)"
 #            echo "check num_dirs_left=$num_dirs_left cl_size=$cl_size"
-            if [ $num_dirs_left -eq 0 -o $cl_size -ge $INSIGHTS_CHUNK_SIZE ]; then
+            if [ "$num_dirs_left" -eq 0 ] || [ "$cl_size" -ge "$INSIGHTS_CHUNK_SIZE" ]; then
 #                echo "break num_dirs_left=$num_dirs_left cl_size=$cl_size"
                 break
             fi
-            dir_to_move="`find cluster -maxdepth 2 -mindepth 1 -type d|head -n 1`"
+            dir_to_move="$(find cluster -maxdepth 2 -mindepth 1 -type d|head -n 1)"
             if [ -n "$dir_to_move" ]; then
 #                echo "moving $dir_to_move to $CL_DIR"
                 mv "$dir_to_move" "$CL_DIR"
             fi
         done
 
-        collected_dirs=`find "$CL_DIR" -maxdepth 2 -mindepth 1 -type d|wc -l`
-        if [ $collected_dirs -gt 0 ] ; then
+        collected_dirs="$(find "$CL_DIR" -maxdepth 2 -mindepth 1 -type d|wc -l)"
+        if [ "$collected_dirs" -gt 0 ] ; then
             if [ -z "$ORIG_RES_FILE" ]; then
                 RES_FILE="${OUT_DIR}/${CLUSTER_NAME}-${FILE_TYPE}-${file_num}.tar"
             else
@@ -183,5 +182,5 @@ else # processing insights
     done
 fi
     
-rm -rf $TMPDIR
-cd "$OLDWD"
+rm -rf "$TMPDIR"
+cd "$OLDWD" || exit

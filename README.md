@@ -37,8 +37,9 @@ get list of options):
   the same machine.  This PID is used to get information about limits set for process, etc.;
 * `-f` - specifies the name where it should put the collected results (could be useful for
   some automation);
-* `-w` - specifies that we need to collect data for DDAC;
 * `-i` - specifies that we need to collect data for DataStax Insights.
+* `-t` - specifies the type of installation: `dse`, `ddac`, `coss` (default: `dse`);
+* `-v` - enables more verbose output by all scripts
 
 After successful execution, script generates file with name
 `/var/tmp/dse-diag-<IP_Address>.tar.gz`, like, `/var/tmp/dse-diag-10.200.179.237.tar.gz`,
@@ -54,10 +55,10 @@ directory with collected files (it could be either relative, or absolute).  Ther
 optional parameters:
 
 * `-f` - specifies path to file where data should be put;
-* `-w` - specifies that we need to merge diagnostic for DDAC;
 * `-i` - specifies that we need to merge Insights data;
 * `-p` - specifies the custom pattern for file names if `collect_node_diag.sh` was called
   with `-f` parameter - otherwise this script may not find the data.
+* `-t` - specifies the type of installation: `dse`, `ddac`, `coss` (default: `dse`).
 
 This script performs following:
 
@@ -77,17 +78,23 @@ it, copying back collected data, and generate resulting tarball with DSE Insight
 diagnostic data.
 
 ```
-Usage: ./collect_diag.sh [-f file_name] [-p file_pattern] [-i] [-d] [-o output_dir] [-n nodetool_options] [-t timeout] [-r] [path_to_dse_or_ddac_root]
+Usage: ./collect_diag.sh -t <type> [options] [path]
+ ----- Required --------
+   -t type -  valid choices are "coss", "ddac", "dse"
+ ----- Options --------
+   -c cqlsh_options - e.g "-u user -p password" etc. Ensure you enclose with "
+   -d dsetool_options - options to pass to dsetool. Syntax the same as "-c"
    -f file_name - file with list of hosts where to execute command (default - try to get list from 'nodetool status')
-   -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP
-   -o output_dir - where to put resulting file (default: /var/tmp)
-   -n nodetool_options - general options to pass to nodetool (JMX user, password, etc.)
-   -c cqlsh_options - options to pass to cqlsh (user name, password, etc.)
-   -d dsetool_options - options to pass to dsetool (JMX user, password, etc.)
-   -t timeout - timeout for PSSH/SSH in seconds (default: 600)
-   -i - collect DSE insights data
-   -d - collect diagnostic for DDAC (requires specificication of the root)
+   -i insights - collect only data for DSE Insights
+   -I insights_dir - directory that contains insights .gz files
+   -n nodetool_options - options to pass to nodetool. Syntax the same as "-c"
+   -o output_dir - where to put resulting file (default: /var/folders/js/stc2gc756bs2s2d2_kx34svw0000gn/T/tmp.iEP7he6g)
+   -p pid - PID of DSE or DDAC process
    -r - remove collected files after generation of resulting tarball
+   -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP
+   -u timeout - timeout for PSSH/SSH in seconds (default: 600)
+   -v - verbose output
+   path - top directory of COSS, DDAC or DSE installation (for tarball installs)
 ```
 
 Please note that user name should be passed as `-o User=...` in `-s` option, as `scp` and
@@ -96,6 +103,20 @@ Please note that user name should be passed as `-o User=...` in `-s` option, as 
 Example of usage with list of hosts passed explicitly (file `mhosts`):
 
 ```sh
-./collect_diag.sh -f mhosts -r -i -s "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
+./collect_diag.sh -t dse -f mhosts -r -s \
+  "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton"
 ```
 
+Or for DDAC:
+
+```sh
+./collect_diag.sh -t ddac -f mhosts -r -s \
+  "-i ~/.ssh/private_key -o StrictHostKeyChecking=no -o User=automaton" \
+  /usr/local/lib/cassandra
+```
+
+```
+./collect_diag.sh -t ddac -f mhosts3 -r -s \
+  "-i ~/.automaton/nebula/alexey.ott/SJC/sales-sandbox/ddactest/private_key -o StrictHostKeyChecking=no -o User=automaton" \
+  /usr/local/lib/cassandra
+```

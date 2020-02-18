@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# File: collect_node_diag.sh
+# File: collect_diag.sh
 #
 # Created: Friday, May 31 2019
 ##
@@ -21,6 +21,7 @@ function usage() {
     echo "   -r - remove collected files after generation of resulting tarball"
     echo "   -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP"
     echo "   -u timeout - timeout for PSSH/SSH in seconds (default: $TIMEOUT)"
+    echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
@@ -40,6 +41,7 @@ function check_type {
 # Setup vars
 # ----------
 
+VERBOSE=""
 NT_OPTS=""
 CQLSH_OPTS=""
 DT_OPTS=""
@@ -72,7 +74,7 @@ INSIGHT_COLLECT_OPTS=""
 # Parse arguments
 # ---------------
 
-while getopts ":hirn:c:d:f:o:p:s:t:u:I:" opt; do
+while getopts ":hivrn:c:d:f:o:p:s:t:u:I:" opt; do
     case $opt in
         c) CQLSH_OPTS=$OPTARG
            ;;
@@ -82,7 +84,7 @@ while getopts ":hirn:c:d:f:o:p:s:t:u:I:" opt; do
            ;;
         i) INSIGHTS="true"
            PATTERN_SUFFIX="dse-insights"
-           COLLECT_OPTS="-i"
+           COLLECT_OPTS="$COLLECT_OPTS -i"
            ;;
         I) INSIGHTS_DIR=$OPTARG
             INSIGHT_COLLECT_OPTS="-I ${INSIGHTS_DIR}"
@@ -100,6 +102,9 @@ while getopts ":hirn:c:d:f:o:p:s:t:u:I:" opt; do
         t) TYPE=$OPTARG
            ;;
         u) TIMEOUT=$OPTARG
+           ;;
+        v) VERBOSE=true
+           COLLECT_OPTS="$COLLECT_OPTS -v"
            ;;
         h) usage
            exit 0

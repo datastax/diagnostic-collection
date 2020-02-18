@@ -18,19 +18,21 @@ function usage() {
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
     echo "   -o output_dir - where to put generated files. default: /var/tmp"
+    echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
-echo "Got args $*"
+#echo "Got args $*"
 
 # ----------
 # Setup vars
 # ----------
 
+VERBOSE=""
 NT_OPTS=""
 CQLSH_OPTS=""
 DT_OPTS=""
-DSE_PID=""
+PID=""
 RES_FILE=""
 INSIGHTS_MODE=""
 INSIGHTS_DIR=""
@@ -47,8 +49,8 @@ CONF_DIR=""
 DSE_CONF_DIR=""
 LOG_DIR=""
 TMP_DIR=""
-OLDWD="`pwd`"
-HOST_OS=`uname -s`
+OLDWD="$(pwd)"
+HOST_OS="$(uname -s)"
 JCMD="$JAVA_HOME/bin/jcmd"
 
 # settings overridable via environment variables
@@ -58,13 +60,13 @@ IOSTAT_LEN="${IOSTAT_LEN:-10}"
 # Parse arguments
 # ---------------
 
-while getopts ":hin:c:p:f:d:o:t:I:" opt; do
+while getopts ":hivn:c:p:f:d:o:t:I:" opt; do
     case $opt in
         n) NT_OPTS=$OPTARG
            ;;
         c) CQLSH_OPTS=$OPTARG
            ;;
-        p) DSE_PID=$OPTARG
+        p) PID=$OPTARG
            ;;
         f) RES_FILE=$OPTARG
            ;;
@@ -78,33 +80,44 @@ while getopts ":hin:c:p:f:d:o:t:I:" opt; do
             ;;
         t) TYPE=$OPTARG
            ;;
+        v) VERBOSE=true
+           ;;
         h) usage
            exit 0
            ;;
+        *) echo "Unknown flag '$opt'"
+           usage
+           exit 1
+           ;;
     esac
 done
-shift "$(($OPTIND -1))"
-ROOT_DIR=$1
+shift "$((OPTIND -1))"
+ROOT_DIR="$1"
 
-mkdir -p ${OUTPUT_DIR}
+if [ -n "$INSIGHTS_MODE" ] && [ "$TYPE" != "dse" ]; then
+    echo "Collection of DataStax Insights data is now supported only for DSE!"
+    exit 1
+fi
 
-echo "Using dse dir of ${ROOT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+
+[ -n "${ROOT_DIR}" ] && echo "Using ${ROOT_DIR} as root dir for DSE/DDAC/C*"
 
 function get_node_ip {
-    NODE_ADDR="`grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^broadcast_address:[ ]*\([^ ]*\)$|\1|'`"
-    CONN_ADDR=$NODE_ADDR
+    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^broadcast_address:[ ]*\([^ ]*\)$|\1|')"
+    CONN_ADDR="$NODE_ADDR"
     if [ -z "$NODE_ADDR" ]; then
-        NODE_ADDR="`grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^listen_address:[ ]*\([^ ]*\)$|\1|'`"
-        CONN_ADDR=$NODE_ADDR
-        if [ -z "$NODE_ADDR" -o "$NODE_ADDR" = "127.0.0.1" -o "$NODE_ADDR" = "localhost" ]; then
+        NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^listen_address:[ ]*\([^ ]*\)$|\1|')"
+        CONN_ADDR="$NODE_ADDR"
+        if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
 #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
             if [ "$HOST_OS" = "Linux" ]; then
-                NODE_ADDR=`hostname -i`
+                NODE_ADDR="$(hostname -i)"
             else
-                NODE_ADDR=`hostname`
+                NODE_ADDR="$(hostname)"
             fi
         fi
-        CONN_ADDR=$NODE_ADDR
+        CONN_ADDR="$NODE_ADDR"
         if [ -z "$CONN_ADDR" ]; then
             echo "Can't detect node's address..."
             exit 1
@@ -116,9 +129,9 @@ function get_node_ip {
 function set_paths {
     # tmp and output paths
     if [ -d "$OUTPUT_DIR" ]; then 
-        TMP_DIR=$OUTPUT_DIR/diag.$$
+        TMP_DIR="$OUTPUT_DIR/diag.$$"
     else
-        TMP_DIR=/var/tmp/diag.$$
+        TMP_DIR="/var/tmp/diag.$$"
     fi
     mkdir -p $TMP_DIR
 
@@ -133,12 +146,12 @@ function set_paths {
     if [ -z "$CONF_DIR" ]; then
         # DDAC - we have only tarball...
         if [ -n "$IS_DDAC" ]; then
-            CONF_DIR=$ROOT_DIR/conf
+            CONF_DIR="$ROOT_DIR/conf"
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
-            CONF_DIR=$ROOT_DIR/conf
+            CONF_DIR="$ROOT_DIR/conf"
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_DSE" ]; then
-            CONF_DIR=$ROOT_DIR/resources/cassandra/conf
-            DSE_CONF_DIR=$ROOT_DIR/resources/dse/conf	
+            CONF_DIR="$ROOT_DIR/resources/cassandra/conf"
+            DSE_CONF_DIR="$ROOT_DIR/resources/dse/conf"
             # DSE package
         elif [ -n "$IS_PACKAGE" ] && [ -n "$IS_DSE" ]; then
             CONF_DIR=/etc/dse/cassandra
@@ -150,16 +163,15 @@ function set_paths {
     fi
 
     # binary paths
-    # DDAC
     if [ -z "$BIN_DIR" ]; then
         if [ -n "$IS_DDAC" ]; then
-            BIN_DIR=$ROOT_DIR/bin
+            BIN_DIR="$ROOT_DIR/bin"
             # DSE tarball
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_DSE" ]; then
-            BIN_DIR=$ROOT_DIR/bin
+            BIN_DIR="$ROOT_DIR/bin"
             # COSS tarball
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
-            BIN_DIR=$ROOT_DIR/bin
+            BIN_DIR="$ROOT_DIR/bin"
             # DSE package
         elif [ -n "$IS_PACKAGE" ] && [ -n "$IS_DSE" ]; then
             BIN_DIR=/usr/bin
@@ -169,11 +181,11 @@ function set_paths {
         fi
     fi
 
-    echo "CONF_DIR=${CONF_DIR}"
-    echo "DSE_CONF_DIR=${DSE_CONF_DIR}"
-    echo "BIN_DIR=${CONF_DIR}"
-    echo "LOG_DIR=${LOG_DIR}"
-    echo "TMP_DIR=${TMP_DIR}"
+    [ -n "$VERBOSE" ] && echo "CONF_DIR=${CONF_DIR}"
+    [ -n "$VERBOSE" ] && echo "DSE_CONF_DIR=${DSE_CONF_DIR}"
+    [ -n "$VERBOSE" ] && echo "BIN_DIR=${CONF_DIR}"
+    [ -n "$VERBOSE" ] && echo "LOG_DIR=${LOG_DIR}"
+    [ -n "$VERBOSE" ] && echo "TMP_DIR=${TMP_DIR}"
 
     [[ -d "$CONF_DIR" ]] || { echo "Missing CONF_DIR"; exit 1; }
     [[ -z "${DSE_CONF_DIR}" || -d "$DSE_CONF_DIR" ]] || { echo "Missing DSE_CONF_DIR"; exit 1; }
@@ -186,7 +198,7 @@ function detect_install {
     # DDAC Install
     if [ "$TYPE" == "ddac" ]; then
         IS_DDAC="true"
-        if [ -d "$ROOT_DIR" -a -d "$ROOT_DIR/conf" ]; then
+        if [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/conf" ]; then
             IS_TARBALL="true"
         else
             echo "DDAC install: no tarball directory found, or was specified."
@@ -197,14 +209,14 @@ function detect_install {
     elif [ "$TYPE" == "coss" ]; then
         IS_COSS="true"
         # COSS package install
-        if [ -d "/etc/cassandra" -a -f "/etc/default/cassandra" -a -d "/usr/share/cassandra" ]; then
+        if [ -d "/etc/cassandra" ] && [ -f "/etc/default/cassandra" ] && [ -d "/usr/share/cassandra" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/cassandra"
-            echo "COSS install: package directories successfully found. Proceeding..."
+            [ -n "$VERBOSE" ] && echo "COSS install: package directories successfully found. Proceeding..."
         # COSS tarball install
-        elif [ -d "$ROOT_DIR" -a -d "$ROOT_DIR/conf" ]; then
+        elif [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/conf" ]; then
             IS_TARBALL="true"
-            echo "COSS install: tarball directories successfully found. Proceeding..."
+            [ -n "$VERBOSE" ] && echo "COSS install: tarball directories successfully found. Proceeding..."
         else
             echo "COSS install: no package or tarball directories found, or no tarball directory specified."
             usage
@@ -214,15 +226,15 @@ function detect_install {
     elif [ "$TYPE" == "dse" ]; then
         IS_DSE="true"
         # DSE package install
-        echo "DSE install: Checking install type..."
-        if [ -d "/etc/dse" -a -f "/etc/default/dse" -a -d "/usr/share/dse/" ]; then
+        [ -n "$VERBOSE" ] && echo "DSE install: Checking install type..."
+        if [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/dse"
-            echo "DSE install: package directories successfully found. Proceeding..."
+            [ -n "$VERBOSE" ] && echo "DSE install: package directories successfully found. Proceeding..."
         # DSE tarball install
-        elif [ -d "$ROOT_DIR" -a -d "$ROOT_DIR/resources/cassandra/conf" -a -d "$ROOT_DIR/resources/dse/conf" ]; then
+        elif [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/resources/cassandra/conf" ] && [ -d "$ROOT_DIR/resources/dse/conf" ]; then
             IS_TARBALL="true"
-            echo "DSE install: tarball directories successfully found. Proceeding..."
+            [ -n "$VERBOSE" ] && echo "DSE install: tarball directories successfully found. Proceeding..."
         else
             echo "DSE install: no package or tarball directories found, or no tarball directory specified."
             usage
@@ -246,9 +258,9 @@ function detect_install {
 
 function get_pid {
     if [ -z "$PID" ] && ([ -n "$IS_COSS" ] || [ -n "$IS_DDAC" ]) ; then
-        PID=`ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|'`
-    elif [ -z "$PID" -a -n "$IS_DSE" ]; then
-        PID=`ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|'`
+        PID="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+    elif [ -z "$PID" ] && [ -n "$IS_DSE" ]; then
+        PID="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
     fi
 }
 
@@ -257,10 +269,10 @@ function collect_system_info() {
     echo "Collecting OS level info..."
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -n "$PID" ]; then
-            cat /proc/$PID/limits > $DATA_DIR/process_limits 2>&1
+            cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
         fi
         cat /sys/kernel/mm/transparent_hugepage/defrag > $DATA_DIR/os-metrics/hugepage_defrag 2>&1
-        sudo blockdev --report > $DATA_DIR/os-metrics/blockdev_report 2>&1
+        sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report 
         free > $DATA_DIR/os-metrics/free 2>&1
         iostat -ymxt 1 $IOSTAT_LEN > $DATA_DIR/os-metrics/iostat 2>&1
         vmstat  -w -t -a > $DATA_DIR/os-metrics/wmstat-mem 2>&1
@@ -295,8 +307,8 @@ function collect_system_info() {
     # Collect NTP info (for Linux)
     echo "Collecting ntp info..."
     if [ "$HOST_OS" = "Linux" ]; then
-        echo "$(ntptime)" > $DATA_DIR/ntp/ntptime 2>&1
-        echo "$(ntpstat)" > $DATA_DIR/ntp/ntpstat 2>&1
+        ntptime > $DATA_DIR/ntp/ntptime 2>&1
+        ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
     fi
     # Collect TOP info (for Linux)
     echo "Collecting top info..."
@@ -336,12 +348,12 @@ function collect_system_info() {
     fi
     # Collect JVM system info (for Linux)
     echo "Collecting jvm system info..."
-    if [ "$HOST_OS" = "Linux" ] && [ -n $JAVA_HOME ] && [ -n $IS_PACKAGE ]; then
-        sudo -u $CASS_USER $JCMD $PID VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
-        sudo -u $CASS_USER $JCMD $PID VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
-    elif [ "$HOST_OS" = "Linux" ] && [ -n $JAVA_HOME ] && [ -z $IS_PACKAGE ]; then
-        $JCMD $PID VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
-        $JCMD $PID VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
+    if [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ -n "$IS_PACKAGE" ]; then
+        sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
+        sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > $DATA_DIR/java_command_line.txt
+    elif [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ -z "$IS_PACKAGE" ]; then
+        "$JCMD" "$PID" VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
+        "$JCMD" "$PID" VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
     fi       
     # Collect Data DIR info
     echo "Collecting disk info..."    
@@ -350,8 +362,8 @@ function collect_system_info() {
        # The multiple sed statements strip out leading / trailing lines
        # and concatenate on the same line where multiple directories are
        # configured to allow Nibbler to read it as a csv line
-       DATA_CONF=$(cat $CONF_DIR/cassandra.yaml | sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
-       COMMITLOG_CONF=$(cat $CONF_DIR/cassandra.yaml | sed -n "/^commitlog_directory:/,/^$/p" | grep -v -E "^$" | awk '{print $2}')
+       DATA_CONF=$(cat "$CONF_DIR/cassandra.yaml" | sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
+       COMMITLOG_CONF=$(cat "$CONF_DIR/cassandra.yaml" | sed -n "/^commitlog_directory:/,/^$/p" | grep -v -E "^$" | awk '{print $2}')
        # Checks the data and commitlog variables are set. If not then
        # read the JVM variable cassandra.storagedir and append paths as
        # necessary.
@@ -397,7 +409,7 @@ function collect_data {
         # auto-detect log directory
         if [ -f "$DATA_DIR/java_cmdline" ]; then
             TLDIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.logdir=\([^ ]*\) .*$|\1|'`"
-            if [ -n "$TLDIR" -a -d "$TLDIR" ]; then
+            if [ -n "$TLDIR" ] && [ -d "$TLDIR" ]; then
                 CASS_LOG_DIR=$TLDIR
             fi
         fi
@@ -405,6 +417,7 @@ function collect_data {
         if [ -z "$CASS_LOG_DIR" ]; then
             CASS_LOG_DIR=$LOG_DIR
         fi
+        
         # Collect the logs
         for i in debug.log  system.log gc.log; do
             if [ -f "$CASS_LOG_DIR/$i" ]; then
@@ -447,18 +460,18 @@ function collect_data {
         fi
         # record command line params
         if [ -n "$PID" ]; then
-            ps -aef|grep $PID|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
+            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
         fi
         # auto-detect log directory
         if [ -f "$DATA_DIR/java_cmdline" ]; then
             TLDIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.logdir=\([^ ]*\) .*$|\1|'`"
-            if [ -n "$TLDIR" -a -d "$TLDIR" ]; then
+            if [ -n "$TLDIR" ] && [ -d "$TLDIR" ]; then
                 DSE_LOG_DIR=$TLDIR
             fi
         fi
         # if not set, then default
         if [ -z "$DSE_LOG_DIR" ]; then
-            DSE_LOG_DIR=$LOG_DIR
+            DSE_LOG_DIR="$LOG_DIR"
         fi
         # Collect the logs
         for i in debug.log  system.log gc.log output.log gremlin.log dse-collectd.log; do
@@ -468,7 +481,7 @@ function collect_data {
         done
         # Collect GC logs
         if [ -f "$DATA_DIR/java_cmdline" ]; then
-            GC_LOG="`cat $DATA_DIR/java_cmdline|sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|'`"
+            GC_LOG="$(cat $DATA_DIR/java_cmdline|sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|')"
             if [ -n "$GC_LOG" -a -f "$GC_LOG" ]; then
                 cp "$GC_LOG" $DATA_DIR/logs/cassandra/
             fi
@@ -481,7 +494,7 @@ function collect_data {
 
         # Versions to determine if nodesync available
         DSE_VERSION="`$BIN_DIR/dse -v`"
-        DSE_MAJOR_VERSION="`echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|'`"
+        DSE_MAJOR_VERSION="$(echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|')"
     
         # collecting nodetool information
         echo "Collecting nodetool/dsetool output..."
@@ -505,9 +518,9 @@ function collect_data {
 
         # collecting schema
         echo "Collecting schema info..."
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
+        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' "$CONN_ADDR" > $DATA_DIR/driver/metadata 2>&1
+        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' "$CONN_ADDR" > $DATA_DIR/driver/schema 2>&1
+        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' "$CONN_ADDR" > $DATA_DIR/driver/full-schema 2>&1
 
         # collecting process-related info
         collect_system_info  
@@ -515,7 +528,7 @@ function collect_data {
 }
 
 function collect_insights {
-  if [ -n "$INSIGHTS_MODE" ]; then
+  if [ -n "$INSIGHTS_MODE" ] && [ "$TYPE" = "dse" ]; then
     echo "Collecting insights data"
     INSIGHTS_DIR=${INSIGHTS_DIR:-"/var/lib/cassandra/insights_data/insights"}
     # TODO: was taken from Mani's code as-is, maybe need to improve, like, read the top-level sections, etc.... 
@@ -548,31 +561,31 @@ function collect_insights {
         exit 1
     fi
 
-    NODE_ID="`$BIN_DIR/nodetool $NT_OPTS info|grep -E '^ID'|sed -e 's|^ID.*:[[:space:]]*\([0-9a-fA-F].*\)|\1|'`"
+    NODE_ID="$($BIN_DIR/nodetool $NT_OPTS info|grep -E '^ID'|sed -e 's|^ID.*:[[:space:]]*\([0-9a-fA-F].*\)|\1|')"
     # Node could be offline, so nodetool may not work
     if [ -n "$NODE_ID" ]; then
-        NODE_ADDR=$NODE_ID
+        NODE_ADDR="$NODE_ID"
     fi
-    DATA_DIR=$TMP_DIR/$NODE_ADDR
-    mkdir -p $DATA_DIR
+    DATA_DIR="$TMP_DIR"/"$NODE_ADDR"
+    mkdir -p "$DATA_DIR"
 
     # we should be careful when copying the data - list of files could be very long...
-    HAS_RSYNC="`which rsync`"
+    HAS_RSYNC="$(command -v rsync)"
     if [ -n "$HAS_RSYNC" ]; then
-        rsync -r --include='*.gz' --exclude='*' $INSIGHTS_DIR/ $DATA_DIR/
+        rsync -r --include='*.gz' --exclude='*' "$INSIGHTS_DIR/" "$DATA_DIR/"
     elif [ "$HOST_OS" = "Linux" ]; then
-        find $INSIGHTS_DIR/ -maxdepth 1 -name '*.gz' -print0|xargs -0 cp -t $DATA_DIR
+        find "$INSIGHTS_DIR/" -maxdepth 1 -name '*.gz' -print0|xargs -0 cp -t "$DATA_DIR"
     else
-        cp $INSIGHTS_DIR/*.gz $DATA_DIR
+        cp "$INSIGHTS_DIR"/*.gz "$DATA_DIR"
     fi
   fi
 }
 
 function create_directories {
     # Common for COSS / DDAC & DSE
-    mkdir -p $DATA_DIR/{logs/cassandra,nodetool,conf/cassandra,driver,os-metrics,ntp}
+    mkdir -p "$DATA_DIR"/{logs/cassandra,nodetool,conf/cassandra,driver,os-metrics,ntp}
     if [ -n "$IS_DSE" ]; then
-        mkdir -p $DATA_DIR/{logs/tomcat,dsetool,conf/dse}
+        mkdir -p "$DATA_DIR"/{logs/tomcat,dsetool,conf/dse}
     fi
 }
 
@@ -582,19 +595,19 @@ function create_archive {
     fi
     echo "Creating archive file $RES_FILE"
     # Creates tar/gzip file without base dir same as node IP
-    tar -C $TMP_DIR -czf $RES_FILE $NODE_ADDR
+    tar -C "$TMP_DIR" -czf "$RES_FILE" "$NODE_ADDR"
 }
 
 function cleanup {
     echo "Removing temp directory $TMP_DIR"
-    rm -rf $TMP_DIR
+    rm -rf "$TMP_DIR"
 }
 
 # Call functions in order
 detect_install
 set_paths
 get_node_ip
-DATA_DIR=$TMP_DIR/$NODE_ADDR
+DATA_DIR="$TMP_DIR/$NODE_ADDR"
 get_pid
 create_directories
 collect_data

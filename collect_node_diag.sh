@@ -52,6 +52,7 @@ TMP_DIR=""
 OLDWD="$(pwd)"
 HOST_OS="$(uname -s)"
 JCMD="$JAVA_HOME/bin/jcmd"
+DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
 
 # settings overridable via environment variables
 IOSTAT_LEN="${IOSTAT_LEN:-10}"
@@ -93,11 +94,6 @@ while getopts ":hivn:c:p:f:d:o:t:I:" opt; do
 done
 shift "$((OPTIND -1))"
 ROOT_DIR="$1"
-
-if [ -n "$INSIGHTS_MODE" ] && [ "$TYPE" != "dse" ]; then
-    echo "Collection of DataStax Insights data is now supported only for DSE!"
-    exit 1
-fi
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -528,25 +524,27 @@ function collect_data {
 }
 
 function collect_insights {
-  if [ -n "$INSIGHTS_MODE" ] && [ "$TYPE" = "dse" ]; then
+  if [ -n "$INSIGHTS_MODE" ]; then
     echo "Collecting insights data"
-    INSIGHTS_DIR=${INSIGHTS_DIR:-"/var/lib/cassandra/insights_data/insights"}
-    # TODO: was taken from Mani's code as-is, maybe need to improve, like, read the top-level sections, etc.... 
-    while read line; do
-        name=$line
-        case $name in
-            *"$INSIGHTS_OPTIONS"*|*"$INSIGHTS_DATA_DIR"*)
-                if [[ $name != \#* ]];
-                then
-                    awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
-                    if [[ $name == data_dir* ]];
-       	            then
-	                INSIGHTS_LOG_DIR="`echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|'`"/insights 
-                        break	    
+    INSIGHTS_DIR=${INSIGHTS_DIR:-${DEFAULT_INSIGHTS_DIR}}
+    if [ "$TYPE" = "dse" ] && [ "$INSIGHTS_DIR" = "$DEFAULT_INSIGHTS_DIR" ]; then
+        # TODO: was taken from Mani's code as-is, maybe need to improve, like, read the top-level sections, etc.... 
+        while read line; do
+            name=$line
+            case $name in
+                *"$INSIGHTS_OPTIONS"*|*"$INSIGHTS_DATA_DIR"*)
+                    if [[ $name != \#* ]];
+                    then
+                        awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
+                        if [[ $name == data_dir* ]];
+       	                then
+	                    INSIGHTS_LOG_DIR="`echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|'`"/insights 
+                            break	    
+                        fi
                     fi
-                fi
-        esac
-    done < $DSE_CONF_DIR/dse.yaml
+            esac
+        done < $DSE_CONF_DIR/dse.yaml
+    fi
     
     if [ ! -d "$INSIGHTS_DIR" ]; then
         echo "Can't find Insights directory, or it doesn't exist! $INSIGHTS_DIR"

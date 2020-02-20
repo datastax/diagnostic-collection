@@ -26,12 +26,7 @@ function usage() {
 }
 
 function check_type {
-    # DDAC Install
-    if [ "$TYPE" == "ddac" -o "$TYPE" == "coss" -o "$TYPE" == "dse" ]; then
-        #COLLECT_OPTS="$COLLECT_OPTS -t $TYPE"
-        echo ""
-    else
-    # No install type selected
+    if [ "$TYPE" != "ddac" ] && [ "$TYPE" != "coss" ] && [ "$TYPE" != "dse" ]; then
         usage
         exit 1
     fi
@@ -41,29 +36,13 @@ function check_type {
 # Setup vars
 # ----------
 
-VERBOSE=""
 NT_OPTS=""
 CQLSH_OPTS=""
 DT_OPTS=""
-DSE_PID=""
-RES_FILE=""
-INSIGHTS_MODE=""
-INSIGHTS_DIR=""
-IS_DDAC=""
-IS_COSS=""
-IS_TARBALL=""
-IS_PACKAGE=""
-ROOT_DIR=""
-DATA_DIR=""
-TMP_DIR=""
-OLDWD="`pwd`"
-PATTERN=""
-PATTER_SUFFIX="diag"
-HOST_OS=`uname -s`
+OLDWD="$(pwd)"
 OUT_DIR=$(mktemp -d)
 TIMEOUT=600
 HOST_FILE=""
-INSIGHTS=""
 SSH_OPTS=""
 NT_OPTS=""
 COLLECT_OPTS=""
@@ -82,18 +61,15 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:" opt; do
            ;;
         f) HOST_FILE=$OPTARG
            ;;
-        i) INSIGHTS="true"
-           PATTERN_SUFFIX="dse-insights"
-           COLLECT_OPTS="$COLLECT_OPTS -i"
+        i) COLLECT_OPTS="$COLLECT_OPTS -i"
            ;;
-        I) INSIGHTS_DIR=$OPTARG
-            INSIGHT_COLLECT_OPTS="-I ${INSIGHTS_DIR}"
-            ;;
+        I) INSIGHT_COLLECT_OPTS="-I '${OPTARG}'"
+           ;;
         n) NT_OPTS=$OPTARG
            ;;
         o) OUT_DIR=$OPTARG
            ;;
-        p) DSE_PID=$OPTARG
+        p) COLLECT_OPTS="$COLLECT_OPTS -p $OPTARG"
            ;;
         r) REMOVE_OPTS="-r"
            ;;
@@ -103,18 +79,19 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:" opt; do
            ;;
         u) TIMEOUT=$OPTARG
            ;;
-        v) VERBOSE=true
-           COLLECT_OPTS="$COLLECT_OPTS -v"
+        v) COLLECT_OPTS="$COLLECT_OPTS -v"
            ;;
         h) usage
            exit 0
            ;;
+        *) echo "Unknown flag passed: '$opt'"
+           usage
+           exit 1
+           ;;
     esac
 done
 shift "$(($OPTIND -1))"
-ROOT_DIR=$1
 echo "Using output directory: ${OUT_DIR}"
-PATTERN="${OUT_DIR}/${PATTERN_SUFFIX}"
 
 # ------------------------
 # Check valid install type
@@ -122,76 +99,50 @@ PATTERN="${OUT_DIR}/${PATTERN_SUFFIX}"
 check_type
 
 DSE_DDAC_ROOT=$1
-if [ -n "$IS_DDAC" -a -z "$DSE_DDAC_ROOT" ]; then
+if [ "$TYPE" = "ddac" ] && [ -z "$DSE_DDAC_ROOT" ]; then
     echo "You must specify root location of DDAC installation"
     usage
     exit 1
 fi
 
 TMP_HOST_FILE=""
-if [ -z "$HOST_FILE" -o ! -f "$HOST_FILE" ]; then
+if [ -z "$HOST_FILE" ] || [ ! -f "$HOST_FILE" ]; then
     echo "File with hosts isn't specified, or doesn't exist, using 'nodetool status'"
     TMP_HOST_FILE=${OUT_DIR}/diag-hosts.$$
-    nodetool status|grep -e '^UN'|sed -e 's|^UN [ ]*\([^ ]*\) .*$|\1|' > $TMP_HOST_FILE
+    nodetool status|grep -e '^UN'|sed -e 's|^UN [ ]*\([^ ]*\) .*$|\1|' > "$TMP_HOST_FILE"
     HOST_FILE=$TMP_HOST_FILE
 fi
 
-#HAS_PSSH="`which pssh`"
-if [ -z "$HAS_PSSH" ]; then
-    echo "We don't have PSSH installed, so performing sequential execution..."
-    # TODO: calculate ServerAliveCountMax based on the timeout & ServerAliveInterval...
-    SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=40"
-    for host in `cat $HOST_FILE`; do
-        echo "Copying collect_node_diag.sh to $host..."
-        scp $SSH_OPTS collect_node_diag.sh "${host}:~/"
-        RES=$?
-        if [ $RES -ne 0 ]; then
-            echo "Error during execution SCP, copying script to host $host, exiting..."
-            exit 1
-        fi
-        NODE_OUT_DIR=$(ssh $SSH_OPTS $host 'mktemp -d')
-        ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS $CQLSH_OPTS $NT_OPTS $DT_OPTS $DSE_DDAC_ROOT"
-        RES=$?
-        if [ $RES -ne 0 ]; then
-            echo "Error during execution PSSH, exiting..."
-            exit 1
-        fi
-        scp $SSH_OPTS "${host}:${NODE_OUT_DIR}/*.tar.gz" $OUT_DIR
-        RES=$?
-        if [ $RES -ne 0 ]; then
-            echo "Error during execution SCP, copying data from host $host, exiting..."
-            exit 1
-        fi
-    done
-else # use pssh
-    echo "Use pssh..."
-    PSSH_OPTS=""
-    if [ -n "$SSH_OPTS" ]; then
-        PSSH_OPTS="-X '$SSH_OPTS'"
+# TODO: calculate ServerAliveCountMax based on the timeout & ServerAliveInterval...
+SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=40"
+for host in `cat $HOST_FILE`; do
+    echo "Copying collect_node_diag.sh to $host..."
+    scp $SSH_OPTS collect_node_diag.sh "${host}:~/"
+    RES=$?
+    if [ $RES -ne 0 ]; then
+        echo "Error during execution SCP, copying script to host $host, exiting..."
+        exit 1
     fi
-    # set -x
-    # TODO: need to debug passing the arguments to PSSH...
-    cat collect_node_diag.sh| pssh -i -h mhosts -t $TIMEOUT -I -x "-o StrictHostKeyChecking=no" $PSSH_OPTS "cat > collect_node_diag.sh; chmod a+x collect_node_diag.sh"
+    NODE_OUT_DIR="$(ssh $SSH_OPTS $host 'mktemp -d'| tr -d '\r')"
+    ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' '$DSE_DDAC_ROOT'"
     RES=$?
     if [ $RES -ne 0 ]; then
         echo "Error during execution PSSH, exiting..."
         exit 1
     fi
-    pssh -i -h mhosts -t $TIMEOUT $PSSH_OPTS -x "-o StrictHostKeyChecking=no" "./collect_node_diag.sh $COLLECT_OPTS $NT_OPTS $CQLSH_OPTS $DT_OPTS $DSE_DDAC_ROOT"
+    scp $SSH_OPTS "${host}:${NODE_OUT_DIR}/*.tar.gz" "$OUT_DIR"
     RES=$?
     if [ $RES -ne 0 ]; then
-        echo "Error during execution PSSH, exiting..."
+        echo "Error during execution SCP, copying data from host $host, exiting..."
         exit 1
     fi
-    for host in `cat $HOST_FILE`; do
-        scp $SSH_OPTS "${host}:${PATTERN}-*.tar.gz" $OUT_DIR
-    done
-fi
+done
 
-./generate_diag.sh -o $OUT_DIR -t $TYPE $REMOVE_OPTS $COLLECT_OPTS $OUT_DIR
+./generate_diag.sh -o $OUT_DIR -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
 
 # do cleanup
 if [ -n "$TMP_HOST_FILE" ]; then
-    rm -f $TMP_HOST_FILE
+    rm -f "$TMP_HOST_FILE"
 fi
 
+cd "$OLDWD" || exit 1

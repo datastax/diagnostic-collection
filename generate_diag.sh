@@ -29,7 +29,6 @@ RES_FILE=""
 INSIGHTS=""
 REMOVE_FILES=""
 TYPE="dse"
-VERBOSE=""
 
 while getopts ":hvirf:p:o:t:" opt; do
     case $opt in
@@ -46,7 +45,7 @@ while getopts ":hvirf:p:o:t:" opt; do
            ;;
         t) TYPE=$OPTARG
            ;;
-        v) VERBOSE=true
+        v)
            ;;
         h) usage
            exit 0

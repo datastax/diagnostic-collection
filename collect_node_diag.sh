@@ -63,21 +63,21 @@ IOSTAT_LEN="${IOSTAT_LEN:-10}"
 
 while getopts ":hivn:c:p:f:d:o:t:I:" opt; do
     case $opt in
-        n) NT_OPTS=$OPTARG
+        n) NT_OPTS="$OPTARG"
            ;;
-        c) CQLSH_OPTS=$OPTARG
+        c) CQLSH_OPTS="$OPTARG"
            ;;
-        p) PID=$OPTARG
+        p) PID="$OPTARG"
            ;;
-        f) RES_FILE=$OPTARG
+        f) RES_FILE="$OPTARG"
            ;;
-        d) DT_OPTS=$OPTARG
+        d) DT_OPTS="$OPTARG"
            ;;
-        o) OUTPUT_DIR=$OPTARG
+        o) OUTPUT_DIR="$OPTARG"
            ;;
         i) INSIGHTS_MODE="true"
            ;;
-        I) INSIGHTS_DIR=$OPTARG
+        I) INSIGHTS_DIR="$OPTARG"
             ;;
         t) TYPE=$OPTARG
            ;;
@@ -538,7 +538,7 @@ function collect_insights {
                         awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
                         if [[ $name == data_dir* ]];
        	                then
-	                    INSIGHTS_LOG_DIR="`echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|'`"/insights 
+	                    INSIGHTS_LOG_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"/insights 
                             break	    
                         fi
                     fi
@@ -612,3 +612,5 @@ collect_data
 collect_insights
 create_archive
 cleanup
+
+cd "$OLDWD" || exit 1

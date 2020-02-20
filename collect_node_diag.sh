@@ -186,7 +186,6 @@ function set_paths {
     [[ -d "$CONF_DIR" ]] || { echo "Missing CONF_DIR"; exit 1; }
     [[ -z "${DSE_CONF_DIR}" || -d "$DSE_CONF_DIR" ]] || { echo "Missing DSE_CONF_DIR"; exit 1; }
     [[ -d "$BIN_DIR" ]] || { echo "Missing BIN_DIR"; exit 1; }
-    [[ -d "$LOG_DIR" ]] || { echo "Missing LOG_DIR"; exit 1; }
     [[ -d "$TMP_DIR" ]] || { echo "Missing TMP_DIR"; exit 1; }
 }
 

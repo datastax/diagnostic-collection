@@ -115,7 +115,7 @@ fi
 
 # TODO: calculate ServerAliveCountMax based on the timeout & ServerAliveInterval...
 SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=40"
-for host in `cat $HOST_FILE`; do
+for host in $(cat $HOST_FILE); do
     echo "Copying collect_node_diag.sh to $host..."
     scp $SSH_OPTS collect_node_diag.sh "${host}:~/"
     RES=$?
@@ -138,7 +138,7 @@ for host in `cat $HOST_FILE`; do
     fi
 done
 
-./generate_diag.sh -o $OUT_DIR -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
+./generate_diag.sh -o "$OUT_DIR" -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
 
 # do cleanup
 if [ -n "$TMP_HOST_FILE" ]; then

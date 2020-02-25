@@ -261,7 +261,7 @@ function get_pid {
 
 # Collects OS info
 function collect_system_info() {
-    echo "Collecting OS level info..."
+    [ -n "$VERBOSE" ] && echo "Collecting OS level info..."
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -n "$PID" ]; then
             cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
@@ -278,7 +278,7 @@ function collect_system_info() {
     fi
     df -k > $DATA_DIR/os-metrics/df 2>&1
     # Collect uname info (for Linux)
-    echo "Collecting uname info..."
+    [ -n "$VERBOSE" ] && echo "Collecting uname info..."
     if [ "$HOST_OS" = "Linux" ]; then
         echo "kernel_name: $(uname -s)" > $DATA_DIR/os-info.txt 2>&1
         echo "node_name: $(uname -n)" >> $DATA_DIR/os-info.txt 2>&1
@@ -300,13 +300,13 @@ function collect_system_info() {
         echo "os type $HOST_OS not catered for or detected" > $DATA_DIR/os-info.txt 2>&1
     fi 
     # Collect NTP info (for Linux)
-    echo "Collecting ntp info..."
+    [ -n "$VERBOSE" ] && echo "Collecting ntp info..."
     if [ "$HOST_OS" = "Linux" ]; then
         ntptime > $DATA_DIR/ntp/ntptime 2>&1
         ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
     fi
     # Collect TOP info (for Linux)
-    echo "Collecting top info..."
+    [ -n "$VERBOSE" ] && echo "Collecting top info..."
     if [ "$HOST_OS" = "Linux" ]; then
         top -n1 -b | \
         grep "Cpu" | \
@@ -324,7 +324,7 @@ function collect_system_info() {
         }' > $DATA_DIR/os-metrics/cpu.txt 2>&1
     fi
     # Collect FREE info (for Linux)
-    echo "Collecting free info..."
+    [ -n "$VERBOSE" ] && echo "Collecting free info..."
     if [ "$HOST_OS" = "Linux" ]; then
         free -m | \
         grep -E "Mem|Swap" | \
@@ -342,46 +342,49 @@ function collect_system_info() {
                 print "swap total: "total"\nswap used: "used"\nswap free: "free}}' > $DATA_DIR/os-metrics/memory.txt 2>&1
     fi
     # Collect JVM system info (for Linux)
-    echo "Collecting jvm system info..."
-    if [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ -n "$IS_PACKAGE" ]; then
-        sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
-        sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > $DATA_DIR/java_command_line.txt
-    elif [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ -z "$IS_PACKAGE" ]; then
-        "$JCMD" "$PID" VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
-        "$JCMD" "$PID" VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
+    [ -n "$VERBOSE" ] && echo "Collecting jvm system info..."
+    if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ]; then
+        if [ -n "$IS_PACKAGE" ]; then
+            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
+            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > $DATA_DIR/java_command_line.txt
+        else 
+            "$JCMD" "$PID" VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
+            "$JCMD" "$PID" VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
+        fi
     fi       
     # Collect Data DIR info
-    echo "Collecting disk info..."    
+    [ -n "$VERBOSE" ] && echo "Collecting disk info..."
+    # TODO: rewrite this to be not dependent on OS, plus check both java_command_line.txt & java_cmdline
     if [ "$HOST_OS" = "Linux" ]; then
        # Try to read the data and commitlog directories from config file.
        # The multiple sed statements strip out leading / trailing lines
        # and concatenate on the same line where multiple directories are
        # configured to allow Nibbler to read it as a csv line
-       DATA_CONF=$(cat "$CONF_DIR/cassandra.yaml" | sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
-       COMMITLOG_CONF=$(cat "$CONF_DIR/cassandra.yaml" | sed -n "/^commitlog_directory:/,/^$/p" | grep -v -E "^$" | awk '{print $2}')
+       DATA_CONF=$(sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" < "$CONF_DIR/cassandra.yaml" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
+       COMMITLOG_CONF=$(sed -n "/^commitlog_directory:/,/^$/p" < "$CONF_DIR/cassandra.yaml" | grep -v -E "^$" | awk '{print $2}')
        # Checks the data and commitlog variables are set. If not then
        # read the JVM variable cassandra.storagedir and append paths as
        # necessary.
        if [ -n "$DATA_CONF" ]; then
            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
        else
-           DATA_CONF=$(cat $DATA_DIR/java_command_line.txt | tr " " "\n" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
+           DATA_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
        fi
        if [ -n "$COMMITLOG_CONF" ]; then
            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
        else
-           COMMITLOG_CONF=$(cat $DATA_DIR/java_command_line.txt | tr " " "\n" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
+           COMMITLOG_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
        fi
        # Since the data dir might have multiple items we need to check
        # each one using df to verify the physical device
        #for DEVICE in $(cat $CONF_DIR/cassandra.yaml | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
-       for DEVICE in $(echo $DATA_CONF | awk '{gsub(/,/,"\n");print}')
+       for DEVICE in $(echo "$DATA_CONF" | awk '{gsub(/,/,"\n");print}')
        do
            DATA_MOUNT="$DATA_MOUNT,"$(df -h $DEVICE | grep -v "Filesystem" | awk '{print $1}')
        done
-       COMMITLOG_MOUNT=$(df -h $COMMITLOG_CONF | grep -v "Filesystem" | awk '{print $1}')
+       COMMITLOG_MOUNT=$(df -h "$COMMITLOG_CONF" | grep -v "Filesystem" | awk '{print $1}')
        echo "data: $DATA_MOUNT" > $DATA_DIR/os-metrics/disk_device.txt 2>&1
        echo "commitlog: $COMMITLOG_MOUNT" >> $DATA_DIR/os-metrics/disk_device.txt 2>&1
     fi
@@ -389,118 +392,86 @@ function collect_system_info() {
 
 # Collects data from nodes
 function collect_data {
-    # COSS / DDAC
-    if [ -n "$IS_DDAC" ] || [ -n "$IS_COSS" ]; then
-        echo "Collectihg data from node..."
-        for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml; do
-            if [ -f "$CONF_DIR/$i" ] ; then
-                cp $CONF_DIR/$i $DATA_DIR/conf/cassandra/
-            fi
-        done
-        # record command line params
-        if [ -n "$PID" ]; then
-            ps -aef|grep $PID|grep CassandraDaemon > $DATA_DIR/java_cmdline
-        fi
-        # auto-detect log directory
-        if [ -f "$DATA_DIR/java_cmdline" ]; then
-            TLDIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.logdir=\([^ ]*\) .*$|\1|'`"
-            if [ -n "$TLDIR" ] && [ -d "$TLDIR" ]; then
-                CASS_LOG_DIR=$TLDIR
-            fi
-        fi
-        # if not set, then default
-        if [ -z "$CASS_LOG_DIR" ]; then
-            CASS_LOG_DIR=$LOG_DIR
-        fi
-        
-        # Collect the logs
-        for i in debug.log  system.log gc.log; do
-            if [ -f "$CASS_LOG_DIR/$i" ]; then
-                cp "$CASS_LOG_DIR/$i" $DATA_DIR/logs/cassandra/
-            fi
-        done
-        # collecting nodetool information
-        echo "Collecting nodetool output..."
-        for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
-            $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
-        done
-            $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
-    
-        for i in tablestats tpstats ; do
-            $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
-        done
-    
-        # collecting schema
-        echo "Collecting schema info..."
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
-    
-        # collecting process-related info
-        collect_system_info
+    echo "Collectihg data from node..."
 
-    # DSE
-    elif [ -n "$IS_DSE" ]; then
-        echo "Collectihg data from node..."
-        for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml; do
-            if [ -f "$CONF_DIR/$i" ]; then
-                cp "$CONF_DIR/$i" $DATA_DIR/conf/cassandra/
-            fi
-        done
+    if [ -n "$PID" ]; then
+        if [ -n "$IS_DSE" ]; then
+            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
+        else
+            ps -aef|grep "$PID"|grep CassandraDaemon > $DATA_DIR/java_cmdline
+        fi
+    fi
+    
+    for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml; do
+        if [ -f "$CONF_DIR/$i" ] ; then
+            cp $CONF_DIR/$i $DATA_DIR/conf/cassandra/
+        fi
+    done
+
+    # collecting nodetool information
+    [ -n "$VERBOSE" ] && echo "Collecting nodetool output..."
+    for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
+        $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
+    done
+    
+    for i in tablestats tpstats ; do
+        $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
+    done
+    
+    # collecting schema
+    [ -n "$VERBOSE" ] && echo "Collecting schema info..."
+    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
+    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
+    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
+    
+    # collecting process-related info
+    collect_system_info
+
+    # collect logs
+    # auto-detect log directory
+    if [ -f "$DATA_DIR/java_cmdline" ]; then
+        TLDIR="$(sed -e 's|^.*-Dcassandra.logdir=\([^ ]*\) .*$|\1|' < "$DATA_DIR/java_cmdline")"
+        if [ -n "$TLDIR" ] && [ -d "$TLDIR" ]; then
+            CASS_DSE_LOG_DIR=$TLDIR
+        fi
+    fi
+    # if not set, then default
+    if [ -z "$CASS_DSE_LOG_DIR" ]; then
+        CASS_DSE_LOG_DIR="$LOG_DIR"
+    fi
+    for i in debug.log  system.log gc.log output.log gremlin.log dse-collectd.log; do
+        if [ -f "$CASS_DSE_LOG_DIR/$i" ]; then
+            cp "$CASS_DSE_LOG_DIR/$i" $DATA_DIR/logs/cassandra/
+        fi
+    done
+    if [ -f "$DATA_DIR/java_cmdline" ]; then
+        GC_LOG="$(sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|' < "$DATA_DIR/java_cmdline")"
+        if [ -n "$GC_LOG" ] && [ -f "$GC_LOG" ]; then
+            cp "$GC_LOG" $DATA_DIR/logs/cassandra/
+        fi
+    fi
+    
+    # The rest of DSE-specific things
+    if [ -n "$IS_DSE" ]; then
         if [ -f "$DSE_CONF_DIR/dse.yaml" ]; then
             cp "$DSE_CONF_DIR/dse.yaml" $DATA_DIR/conf/dse/
         fi
         if [ -f /etc/default/dse ]; then
             cp /etc/default/dse $DATA_DIR/conf/dse/
         fi
-        # record command line params
-        if [ -n "$PID" ]; then
-            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
-        fi
-        # auto-detect log directory
-        if [ -f "$DATA_DIR/java_cmdline" ]; then
-            TLDIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.logdir=\([^ ]*\) .*$|\1|'`"
-            if [ -n "$TLDIR" ] && [ -d "$TLDIR" ]; then
-                DSE_LOG_DIR=$TLDIR
-            fi
-        fi
-        # if not set, then default
-        if [ -z "$DSE_LOG_DIR" ]; then
-            DSE_LOG_DIR="$LOG_DIR"
-        fi
-        # Collect the logs
-        for i in debug.log  system.log gc.log output.log gremlin.log dse-collectd.log; do
-            if [ -f "$DSE_LOG_DIR/$i" ]; then
-                cp "$DSE_LOG_DIR/$i" $DATA_DIR/logs/cassandra/
-            fi
-        done
-        # Collect GC logs
-        if [ -f "$DATA_DIR/java_cmdline" ]; then
-            GC_LOG="$(cat $DATA_DIR/java_cmdline|sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|')"
-            if [ -n "$GC_LOG" -a -f "$GC_LOG" ]; then
-                cp "$GC_LOG" $DATA_DIR/logs/cassandra/
-            fi
-            # TODO: decide, if we need to collect Tomcat logs
-            # TOMCAT_DIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dtomcat.logs=\([^ ]*\) .*$|\1|'`"
-            # if [ -n "$TOMCAT_DIR" -a -d "$TOMCAT_DIR" ]; then
-            #     
-            # fi
-        fi
+        # TODO: decide, if we need to collect Tomcat logs
+        # if [ -f "$DATA_DIR/java_cmdline" ]; then
+        #     # TOMCAT_DIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dtomcat.logs=\([^ ]*\) .*$|\1|'`"
+        #     # if [ -n "$TOMCAT_DIR" -a -d "$TOMCAT_DIR" ]; then
+        #     #     
+        #     # fi
+        # fi
 
         # Versions to determine if nodesync available
-        DSE_VERSION="`$BIN_DIR/dse -v`"
+        DSE_VERSION="$($BIN_DIR/dse -v)"
         DSE_MAJOR_VERSION="$(echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|')"
-    
-        # collecting nodetool information
-        echo "Collecting nodetool/dsetool output..."
-        for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
-            $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
-        done
-        $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
 
-        for i in tablestats tpstats ; do
-            $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
-        done
+        $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
 
         for i in status ring ; do
             $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
@@ -510,20 +481,10 @@ function collect_data {
         if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
             $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
         fi
-
-        # collecting schema
-        echo "Collecting schema info..."
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' "$CONN_ADDR" > $DATA_DIR/driver/metadata 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' "$CONN_ADDR" > $DATA_DIR/driver/schema 2>&1
-        $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' "$CONN_ADDR" > $DATA_DIR/driver/full-schema 2>&1
-
-        # collecting process-related info
-        collect_system_info  
     fi
 }
 
 function collect_insights {
-  if [ -n "$INSIGHTS_MODE" ]; then
     echo "Collecting insights data"
     INSIGHTS_DIR=${INSIGHTS_DIR:-${DEFAULT_INSIGHTS_DIR}}
     if [ "$TYPE" = "dse" ] && [ "$INSIGHTS_DIR" = "$DEFAULT_INSIGHTS_DIR" ]; then
@@ -552,7 +513,7 @@ function collect_insights {
     if [ -z "$RES_FILE" ]; then
         RES_FILE=$OUTPUT_DIR/dse-insights-$NODE_ADDR.tar.gz
     fi
-    DFILES="`ls -1 $INSIGHTS_DIR/*.gz 2>/dev/null |head -n 20`"
+    DFILES="$(ls -1 $INSIGHTS_DIR/*.gz 2>/dev/null |head -n 20)"
     if [ -z "$DFILES" ]; then
         echo "No Insights files in the specified directory"
         exit 1
@@ -575,7 +536,6 @@ function collect_insights {
     else
         cp "$INSIGHTS_DIR"/*.gz "$DATA_DIR"
     fi
-  fi
 }
 
 function create_directories {
@@ -596,7 +556,7 @@ function create_archive {
 }
 
 function cleanup {
-    echo "Removing temp directory $TMP_DIR"
+    [ -n "$VERBOSE" ] && echo "Removing temp directory $TMP_DIR"
     rm -rf "$TMP_DIR"
 }
 
@@ -607,8 +567,13 @@ get_node_ip
 DATA_DIR="$TMP_DIR/$NODE_ADDR"
 get_pid
 create_directories
-collect_data
-collect_insights
+
+if [ -n "$INSIGHTS_MODE" ]; then
+    collect_insights
+else
+    collect_data
+fi
+
 create_archive
 cleanup
 

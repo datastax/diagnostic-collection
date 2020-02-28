@@ -179,7 +179,7 @@ function set_paths {
 
     [ -n "$VERBOSE" ] && echo "CONF_DIR=${CONF_DIR}"
     [ -n "$VERBOSE" ] && echo "DSE_CONF_DIR=${DSE_CONF_DIR}"
-    [ -n "$VERBOSE" ] && echo "BIN_DIR=${CONF_DIR}"
+    [ -n "$VERBOSE" ] && echo "BIN_DIR=${BIN_DIR}"
     [ -n "$VERBOSE" ] && echo "LOG_DIR=${LOG_DIR}"
     [ -n "$VERBOSE" ] && echo "TMP_DIR=${TMP_DIR}"
 
@@ -439,7 +439,7 @@ function collect_data {
     if [ -z "$CASS_DSE_LOG_DIR" ]; then
         CASS_DSE_LOG_DIR="$LOG_DIR"
     fi
-    for i in debug.log  system.log gc.log output.log gremlin.log dse-collectd.log; do
+    for i in debug.log system.log gc.log output.log gremlin.log dse-collectd.log; do
         if [ -f "$CASS_DSE_LOG_DIR/$i" ]; then
             cp "$CASS_DSE_LOG_DIR/$i" $DATA_DIR/logs/cassandra/
         fi

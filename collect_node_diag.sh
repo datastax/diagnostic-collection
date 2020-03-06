@@ -278,12 +278,18 @@ function collect_system_info() {
             cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
         fi
         cat /sys/kernel/mm/transparent_hugepage/defrag > $DATA_DIR/os-metrics/hugepage_defrag 2>&1
-        sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report 
+        if [ -n "$(command -v blockdev)" ]; then
+            sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report
+        fi
         free > $DATA_DIR/os-metrics/free 2>&1
-        iostat -ymxt 1 $IOSTAT_LEN > $DATA_DIR/os-metrics/iostat 2>&1
-        vmstat  -w -t -a > $DATA_DIR/os-metrics/wmstat-mem 2>&1
-        vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
-        vmstat  -w -t -d > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+        if [ -n "$(command -v iostat)" ]; then
+            iostat -ymxt 1 $IOSTAT_LEN > $DATA_DIR/os-metrics/iostat 2>&1
+        fi
+        if [ -n "$(command -v vmstat)" ]; then
+            vmstat  -w -t -a > $DATA_DIR/os-metrics/wmstat-mem 2>&1
+            vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
+            vmstat  -w -t -d > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+        fi
         if [ -n "$(command -v lscpu)" ]; then
             lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
         else
@@ -307,7 +313,9 @@ function collect_system_info() {
         if [ -f /etc/fstab ]; then
             cp /etc/fstab $DATA_DIR/os-metrics/fstab
         fi
-        lsblk > $DATA_DIR/os-metrics/lsblk
+        if [ -n "$(command -v lsblk)" ]; then
+            lsblk > $DATA_DIR/os-metrics/lsblk
+        fi
         for i in /sys/block/*; do
             DSK="$(basename "$i")"
             for file in $i/queue/*; do
@@ -320,9 +328,15 @@ function collect_system_info() {
             echo "available: $(cat /sys/devices/system/clocksource/clocksource0/available_clocksource)" > $DATA_DIR/os-metrics/clocksource
             echo "current: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)" >> $DATA_DIR/os-metrics/clocksource
         fi
-        dmesg -T > $DATA_DIR/os-metrics/dmesg
-        ifconfig > $DATA_DIR/os-metrics/ifconfig
-        sudo netstat -laputen 2>&1|tee > $DATA_DIR/os-metrics/netstat
+        if [ -n "$(command -v dmesg)" ]; then
+            dmesg -T > $DATA_DIR/os-metrics/dmesg
+        fi
+        if [ -n "$(command -v ifconfig)" ]; then
+            ifconfig > $DATA_DIR/os-metrics/ifconfig
+        fi
+        if [ -n "$(command -v netstat)" ]; then
+            sudo netstat -laputen 2>&1|tee > $DATA_DIR/os-metrics/netstat
+        fi
     fi
     df -k > $DATA_DIR/os-metrics/df 2>&1
     sysctl -a > $DATA_DIR/os-metrics/sysctl 2>&1

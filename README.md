@@ -26,9 +26,9 @@ that performs following actions:
 Script should be executed on every node of cluster, and if it's a tarball installation,
 you need to pass one required parameter - full path to the root directory of DSE
 installation. For package installation, location of the files will be detected
-automatically. There are also optional parameters, that could be provided if, for example,
-you have authentication enabled for Cassandra or JMX, changed JMX port, etc. (pass `-h` to
-get list of options):
+automatically, without specification of the root directory.  There are also optional
+parameters, that could be provided if, for example, you have authentication enabled for
+Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of options):
 
 * `-n` - specifies a list of general options to pass to `nodetool` (JMX user, password, etc.);
 * `-c` - specifies options to pass to `cqlsh` (user name, password, etc.);

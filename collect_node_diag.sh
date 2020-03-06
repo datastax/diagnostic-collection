@@ -13,7 +13,7 @@ function usage() {
     echo "   -c cqlsh_options - e.g \"-u user -p password\" etc. Ensure you enclose with \""
     echo "   -n nodetool_options - options to pass to nodetool. Syntax the same as \"-c\""
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
-    echo "   -p pid - PID of DSE or DDAC process"
+    echo "   -p pid - PID of DSE or DDAC/Cassandra process"
     echo "   -f file_name - name of resulting file"
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
@@ -36,7 +36,6 @@ PID=""
 RES_FILE=""
 INSIGHTS_MODE=""
 INSIGHTS_DIR=""
-IS_DDAC=""
 IS_COSS=""
 IS_TARBALL=""
 IS_PACKAGE=""
@@ -140,10 +139,7 @@ function set_paths {
  
     # config paths
     if [ -z "$CONF_DIR" ]; then
-        # DDAC - we have only tarball...
-        if [ -n "$IS_DDAC" ]; then
-            CONF_DIR="$ROOT_DIR/conf"
-        elif [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
+        if [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
             CONF_DIR="$ROOT_DIR/conf"
         elif [ -n "$IS_TARBALL" ] && [ -n "$IS_DSE" ]; then
             CONF_DIR="$ROOT_DIR/resources/cassandra/conf"
@@ -160,19 +156,9 @@ function set_paths {
 
     # binary paths
     if [ -z "$BIN_DIR" ]; then
-        if [ -n "$IS_DDAC" ]; then
+        if [ -n "$IS_TARBALL" ]; then
             BIN_DIR="$ROOT_DIR/bin"
-            # DSE tarball
-        elif [ -n "$IS_TARBALL" ] && [ -n "$IS_DSE" ]; then
-            BIN_DIR="$ROOT_DIR/bin"
-            # COSS tarball
-        elif [ -n "$IS_TARBALL" ] && [ -n "$IS_COSS" ]; then
-            BIN_DIR="$ROOT_DIR/bin"
-            # DSE package
-        elif [ -n "$IS_PACKAGE" ] && [ -n "$IS_DSE" ]; then
-            BIN_DIR=/usr/bin
-            # COSS package
-        elif [ -n "$IS_PACKAGE" ] && [ -n "$IS_COSS" ]; then
+        elif [ -n "$IS_PACKAGE" ]; then
             BIN_DIR=/usr/bin
         fi
     fi
@@ -192,9 +178,9 @@ function set_paths {
 function detect_install {
     # DDAC Install
     if [ "$TYPE" == "ddac" ]; then
-        IS_DDAC="true"
         if [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/conf" ]; then
             IS_TARBALL="true"
+            IS_COSS="true" # structure of DDAC is the same as OSS
         else
             echo "DDAC install: no tarball directory found, or was specified."
             usage
@@ -204,7 +190,7 @@ function detect_install {
     elif [ "$TYPE" == "coss" ]; then
         IS_COSS="true"
         # COSS package install
-        if [ -d "/etc/cassandra" ] && [ -f "/etc/default/cassandra" ] && [ -d "/usr/share/cassandra" ]; then
+        if [ -z "$ROOT_DIR" ] && [ -d "/etc/cassandra" ] && [ -d "/usr/share/cassandra" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/cassandra"
             [ -n "$VERBOSE" ] && echo "COSS install: package directories successfully found. Proceeding..."
@@ -222,7 +208,7 @@ function detect_install {
         IS_DSE="true"
         # DSE package install
         [ -n "$VERBOSE" ] && echo "DSE install: Checking install type..."
-        if [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
+        if [ -z "$ROOT_DIR" ] && [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/dse"
             [ -n "$VERBOSE" ] && echo "DSE install: package directories successfully found. Proceeding..."
@@ -252,7 +238,7 @@ function detect_install {
 }  
 
 function get_pid {
-    if [ -z "$PID" ] && ([ -n "$IS_COSS" ] || [ -n "$IS_DDAC" ]) ; then
+    if [ -z "$PID" ] && [ -n "$IS_COSS" ] ; then
         PID="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
     elif [ -z "$PID" ] && [ -n "$IS_DSE" ]; then
         PID="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
@@ -480,6 +466,10 @@ function collect_data {
         # collect nodesync rate
         if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
             $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
+        fi
+    elif [ -n "IS_COSS" ]; then
+        if [ -f /etc/default/cassandra ]; then
+            cp /etc/default/cassandra $DATA_DIR/conf/cassandra/default
         fi
     fi
 }

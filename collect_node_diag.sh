@@ -381,37 +381,42 @@ function collect_system_info() {
     [ -n "$VERBOSE" ] && echo "Collecting disk info..."
     # TODO: rewrite this to be not dependent on OS, plus check both java_command_line.txt & java_cmdline
     if [ "$HOST_OS" = "Linux" ]; then
-       # Try to read the data and commitlog directories from config file.
-       # The multiple sed statements strip out leading / trailing lines
-       # and concatenate on the same line where multiple directories are
-       # configured to allow Nibbler to read it as a csv line
-       DATA_CONF=$(sed -n -E "/^data_file_directories:/,/^[a-z]?.*$/p" < "$CONF_DIR/cassandra.yaml" | grep -E "^.*-" | sed -e "s/^- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
-       COMMITLOG_CONF=$(sed -n "/^commitlog_directory:/,/^$/p" < "$CONF_DIR/cassandra.yaml" | grep -v -E "^$" | awk '{print $2}')
-       # Checks the data and commitlog variables are set. If not then
-       # read the JVM variable cassandra.storagedir and append paths as
-       # necessary.
-       if [ -n "$DATA_CONF" ]; then
-           echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
-       else
-           DATA_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
-           echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
-       fi
-       if [ -n "$COMMITLOG_CONF" ]; then
-           echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
-       else
-           COMMITLOG_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
-           echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
-       fi
-       # Since the data dir might have multiple items we need to check
-       # each one using df to verify the physical device
-       #for DEVICE in $(cat $CONF_DIR/cassandra.yaml | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
-       for DEVICE in $(echo "$DATA_CONF" | awk '{gsub(/,/,"\n");print}')
-       do
-           DATA_MOUNT="$DATA_MOUNT,"$(df -h $DEVICE | grep -v "Filesystem" | awk '{print $1}')
-       done
-       COMMITLOG_MOUNT=$(df -h "$COMMITLOG_CONF" | grep -v "Filesystem" | awk '{print $1}')
-       echo "data: $DATA_MOUNT" > $DATA_DIR/os-metrics/disk_device.txt 2>&1
-       echo "commitlog: $COMMITLOG_MOUNT" >> $DATA_DIR/os-metrics/disk_device.txt 2>&1
+        # Try to read the data and commitlog directories from config file.
+        # The multiple sed statements strip out leading / trailing lines
+        # and concatenate on the same line where multiple directories are
+        # configured to allow Nibbler to read it as a csv line
+        DATA_CONF=$(sed -n '/^data_file_directories:/,/^[^ ]/{//!p;};/^data_file_directories:/d' "$CONF_DIR/cassandra.yaml" | grep -e "^[ ]*-" | sed -e "s/^.*- *//" | sed -z "s/\n/,/g" | sed -e "s/.$/\n/")
+        COMMITLOG_CONF=$(grep -e "^commitlog_directory:" "$CONF_DIR/cassandra.yaml" |sed -e 's|^commitlog_directory:[ ]*\(.*\)[ ]*$|\1|')
+        # Checks the data and commitlog variables are set. If not then
+        # read the JVM variable cassandra.storagedir and append paths as
+        # necessary.
+        if [ -n "$DATA_CONF" ]; then
+            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
+        else
+            DATA_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
+            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
+        fi
+        if [ -n "$COMMITLOG_CONF" ]; then
+            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
+        else
+            COMMITLOG_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
+            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
+        fi
+        # Since the data dir might have multiple items we need to check
+        # each one using df to verify the physical device
+        #for DEVICE in $(cat $CONF_DIR/cassandra.yaml | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
+        for DEVICE in $(echo "$DATA_CONF" | awk '{gsub(/,/,"\n");print}')
+        do
+            DM="$(df -h "$DEVICE" | grep -v "Filesystem" | awk '{print $1}')"
+            if [ -z "$DATA_MOUNT" ]; then
+                DATA_MOUNT="$DM"
+            else
+                DATA_MOUNT="$DATA_MOUNT,$DM"
+            fi
+        done
+        COMMITLOG_MOUNT=$(df -h "$COMMITLOG_CONF" | grep -v "Filesystem" | awk '{print $1}')
+        echo "data: $DATA_MOUNT" > $DATA_DIR/os-metrics/disk_device.txt 2>&1
+        echo "commitlog: $COMMITLOG_MOUNT" >> $DATA_DIR/os-metrics/disk_device.txt 2>&1
     fi
 } 
 

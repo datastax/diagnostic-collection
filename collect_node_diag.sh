@@ -99,26 +99,51 @@ mkdir -p "${OUTPUT_DIR}"
 [ -n "${ROOT_DIR}" ] && echo "Using ${ROOT_DIR} as root dir for DSE/DDAC/C*"
 
 function get_node_ip {
-    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^broadcast_address:[ ]*\([^ ]*\)$|\1|')"
-    CONN_ADDR="$NODE_ADDR"
-    if [ -z "$NODE_ADDR" ]; then
-        NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^listen_address:[ ]*\([^ ]*\)$|\1|')"
-        CONN_ADDR="$NODE_ADDR"
-        if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
-#            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
+    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+    if [ -z "$CONN_ADDR" ]; then
+        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+    fi
+    if [ -z "$CONN_ADDR" ]; then
+        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+        if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
-                NODE_ADDR="$(hostname -i)"
+                CONN_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
             else
-                NODE_ADDR="$(hostname)"
+                CONN_ADDR="$(ipconfig getifaddr "$IFACE")"
             fi
         fi
-        CONN_ADDR="$NODE_ADDR"
-        if [ -z "$CONN_ADDR" ]; then
-            echo "Can't detect node's address..."
-            exit 1
+    fi
+    # extract listen address
+    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+    if [ -z "$NODE_ADDR" ]; then
+        IFACE="$(grep -E '^listen_interface: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+        if [ -n "$IFACE" ]; then
+            if [ "$HOST_OS" = "Linux" ]; then
+                NODE_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
+            else
+                NODE_ADDR="$(ipconfig getifaddr "$IFACE")"
+            fi
+        fi
+        if [ -z "$NODE_ADDR" ]; then
+            NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+            if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
+                #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
+                if [ "$HOST_OS" = "Linux" ]; then
+                    NODE_ADDR="$(hostname -i)"
+                else
+                    NODE_ADDR="$(hostname)"
+                fi
+            fi
         fi
     fi
-    
+    [ -n "$VERBOSE" ] && echo "Native Address=$CONN_ADDR, Listen Address=$NODE_ADDR"
+    if [ -z "$CONN_ADDR" ]; then
+        CONN_ADDR="$NODE_ADDR"
+    fi
+    if [ -z "$CONN_ADDR" ]; then
+        echo "Can't detect node's address..."
+        exit 1
+    fi
 }
 
 function set_paths {

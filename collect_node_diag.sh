@@ -98,6 +98,13 @@ mkdir -p "${OUTPUT_DIR}"
 
 [ -n "${ROOT_DIR}" ] && echo "Using ${ROOT_DIR} as root dir for DSE/DDAC/C*"
 
+function debug {
+    if [ -n "$VERBOSE" ]; then
+        DT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        echo "[${DT}]: $1"
+    fi
+}
+
 function get_node_ip {
     CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
     if [ -z "$CONN_ADDR" ]; then
@@ -136,7 +143,7 @@ function get_node_ip {
             fi
         fi
     fi
-    [ -n "$VERBOSE" ] && echo "Native Address=$CONN_ADDR, Listen Address=$NODE_ADDR"
+    debug "Native (RPC) address=$CONN_ADDR, Listen address=$NODE_ADDR"
     if [ -z "$CONN_ADDR" ]; then
         CONN_ADDR="$NODE_ADDR"
     fi
@@ -188,11 +195,11 @@ function set_paths {
         fi
     fi
 
-    [ -n "$VERBOSE" ] && echo "CONF_DIR=${CONF_DIR}"
-    [ -n "$VERBOSE" ] && echo "DSE_CONF_DIR=${DSE_CONF_DIR}"
-    [ -n "$VERBOSE" ] && echo "BIN_DIR=${BIN_DIR}"
-    [ -n "$VERBOSE" ] && echo "LOG_DIR=${LOG_DIR}"
-    [ -n "$VERBOSE" ] && echo "TMP_DIR=${TMP_DIR}"
+    debug "CONF_DIR=${CONF_DIR}"
+    debug "DSE_CONF_DIR=${DSE_CONF_DIR}"
+    debug "BIN_DIR=${BIN_DIR}"
+    debug "LOG_DIR=${LOG_DIR}"
+    debug "TMP_DIR=${TMP_DIR}"
 
     [[ -d "$CONF_DIR" ]] || { echo "Missing CONF_DIR"; exit 1; }
     [[ -z "${DSE_CONF_DIR}" || -d "$DSE_CONF_DIR" ]] || { echo "Missing DSE_CONF_DIR"; exit 1; }
@@ -218,11 +225,11 @@ function detect_install {
         if [ -z "$ROOT_DIR" ] && [ -d "/etc/cassandra" ] && [ -d "/usr/share/cassandra" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/cassandra"
-            [ -n "$VERBOSE" ] && echo "COSS install: package directories successfully found. Proceeding..."
+            debug "COSS install: package directories successfully found. Proceeding..."
         # COSS tarball install
         elif [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/conf" ]; then
             IS_TARBALL="true"
-            [ -n "$VERBOSE" ] && echo "COSS install: tarball directories successfully found. Proceeding..."
+            debug "COSS install: tarball directories successfully found. Proceeding..."
         else
             echo "COSS install: no package or tarball directories found, or no tarball directory specified."
             usage
@@ -232,15 +239,15 @@ function detect_install {
     elif [ "$TYPE" == "dse" ]; then
         IS_DSE="true"
         # DSE package install
-        [ -n "$VERBOSE" ] && echo "DSE install: Checking install type..."
+        debug "DSE install: Checking install type..."
         if [ -z "$ROOT_DIR" ] && [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
             IS_PACKAGE="true"
             ROOT_DIR="/etc/dse"
-            [ -n "$VERBOSE" ] && echo "DSE install: package directories successfully found. Proceeding..."
+            debug "DSE install: package directories successfully found. Proceeding..."
         # DSE tarball install
         elif [ -d "$ROOT_DIR" ] && [ -d "$ROOT_DIR/resources/cassandra/conf" ] && [ -d "$ROOT_DIR/resources/dse/conf" ]; then
             IS_TARBALL="true"
-            [ -n "$VERBOSE" ] && echo "DSE install: tarball directories successfully found. Proceeding..."
+            debug "DSE install: tarball directories successfully found. Proceeding..."
         else
             echo "DSE install: no package or tarball directories found, or no tarball directory specified."
             usage
@@ -272,7 +279,7 @@ function get_pid {
 
 # Collects OS info
 function collect_system_info() {
-    [ -n "$VERBOSE" ] && echo "Collecting OS level info..."
+    debug "Collecting OS level info..."
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -n "$PID" ]; then
             cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
@@ -342,7 +349,7 @@ function collect_system_info() {
     sysctl -a > $DATA_DIR/os-metrics/sysctl 2>&1
     
     # Collect uname info (for Linux)
-    [ -n "$VERBOSE" ] && echo "Collecting uname info..."
+    debug "Collecting uname info..."
     if [ "$HOST_OS" = "Linux" ]; then
         echo "kernel_name: $(uname -s)" > $DATA_DIR/os-info.txt 2>&1
         echo "node_name: $(uname -n)" >> $DATA_DIR/os-info.txt 2>&1
@@ -364,13 +371,17 @@ function collect_system_info() {
         echo "os type $HOST_OS not catered for or detected" > $DATA_DIR/os-info.txt 2>&1
     fi 
     # Collect NTP info (for Linux)
-    [ -n "$VERBOSE" ] && echo "Collecting ntp info..."
+    debug "Collecting ntp info..."
     if [ "$HOST_OS" = "Linux" ]; then
-        ntptime > $DATA_DIR/ntp/ntptime 2>&1
-        ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
+        if [ -n "$(command -v ntptime)" ]; then
+            ntptime > $DATA_DIR/ntp/ntptime 2>&1
+        fi
+        if [ -n "$(command -v ntpstat)" ]; then
+            ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
+        fi
     fi
     # Collect TOP info (for Linux)
-    [ -n "$VERBOSE" ] && echo "Collecting top info..."
+    debug "Collecting top info..."
     if [ "$HOST_OS" = "Linux" ]; then
         top -n1 -b | \
         grep "Cpu" | \
@@ -388,7 +399,7 @@ function collect_system_info() {
         }' > $DATA_DIR/os-metrics/cpu.txt 2>&1
     fi
     # Collect FREE info (for Linux)
-    [ -n "$VERBOSE" ] && echo "Collecting free info..."
+    debug "Collecting free info..."
     if [ "$HOST_OS" = "Linux" ]; then
         free -m | \
         grep -E "Mem|Swap" | \
@@ -406,7 +417,7 @@ function collect_system_info() {
                 print "swap total: "total"\nswap used: "used"\nswap free: "free}}' > $DATA_DIR/os-metrics/memory.txt 2>&1
     fi
     # Collect JVM system info (for Linux)
-    [ -n "$VERBOSE" ] && echo "Collecting jvm system info..."
+    debug "Collecting jvm system info..."
     if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ]; then
         if [ -n "$IS_PACKAGE" ]; then
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
@@ -417,7 +428,7 @@ function collect_system_info() {
         fi
     fi       
     # Collect Data DIR info
-    [ -n "$VERBOSE" ] && echo "Collecting disk info..."
+    debug "Collecting disk info..."
     # TODO: rewrite this to be not dependent on OS, plus check both java_command_line.txt & java_cmdline
     if [ "$HOST_OS" = "Linux" ]; then
         # Try to read the data and commitlog directories from config file.
@@ -478,7 +489,7 @@ function collect_data {
     done
 
     # collecting nodetool information
-    [ -n "$VERBOSE" ] && echo "Collecting nodetool output..."
+    debug "Collecting nodetool output..."
     for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
         $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
     done
@@ -488,7 +499,7 @@ function collect_data {
     done
     
     # collecting schema
-    [ -n "$VERBOSE" ] && echo "Collecting schema info..."
+    debug "Collecting schema info..."
     $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
     $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
     $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
@@ -540,11 +551,16 @@ function collect_data {
         DSE_VERSION="$($BIN_DIR/dse -v)"
         DSE_MAJOR_VERSION="$(echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|')"
 
+        debug "Collecting DSE information..."
         $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
 
-        for i in status ring ; do
+        for i in status ring partitioner ; do
             $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
         done
+
+        $BIN_DIR/dsetool insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
+        $BIN_DIR/dsetool insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
+        $BIN_DIR/dsetool cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
 
         # collect nodesync rate
         if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then

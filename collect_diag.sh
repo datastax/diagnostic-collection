@@ -19,8 +19,8 @@ function usage() {
     echo "   -o output_dir - where to put resulting file (default: $OUT_DIR)"
     echo "   -p pid - PID of DSE or DDAC process"
     echo "   -r - remove collected files after generation of resulting tarball"
-    echo "   -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP"
-    echo "   -u timeout - timeout for PSSH/SSH in seconds (default: $TIMEOUT)"
+    echo "   -s ssh/scp options - options to pass to SSH/SCP"
+    echo "   -u timeout - timeout for SSH in seconds (default: $TIMEOUT)"
     echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
@@ -127,7 +127,7 @@ for host in $(cat $HOST_FILE); do
     ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' '$DSE_DDAC_ROOT'"
     RES=$?
     if [ $RES -ne 0 ]; then
-        echo "Error during execution PSSH, exiting..."
+        echo "Error during execution SSH, exiting..."
         exit 1
     fi
     scp $SSH_OPTS "${host}:${NODE_OUT_DIR}/*.tar.gz" "$OUT_DIR"

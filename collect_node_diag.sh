@@ -574,8 +574,8 @@ function collect_data {
             debug "collecting data for DSE Search core $core"
             mkdir -p "$DATA_DIR/solr/$core/"
             # it's faster to execute cqlsh than dsetool, but it's internal info
-            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/config.xml" 2>&1
-            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/config.xml" 2>&1
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
             #$BIN_DIR/dsetool get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
             #$BIN_DIR/dsetool get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
             $BIN_DIR/dsetool list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1

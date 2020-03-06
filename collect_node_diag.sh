@@ -52,6 +52,7 @@ OLDWD="$(pwd)"
 HOST_OS="$(uname -s)"
 JCMD="$JAVA_HOME/bin/jcmd"
 DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
+MODE="normal"
 
 # settings overridable via environment variables
 IOSTAT_LEN="${IOSTAT_LEN:-10}"
@@ -566,7 +567,24 @@ function collect_data {
         if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
             $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
         fi
-    elif [ -n "IS_COSS" ]; then
+
+        # collect DSE Search data
+        debug "Collecting DSE Search information..."
+        for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' $DATA_DIR/driver/schema 2>/dev/null|sed -e 's|^.* ON \([^ ]*\) (solr_query).*$|\1|'|tr -d '"'); do
+            debug "collecting data for DSE Search core $core"
+            mkdir -p "$DATA_DIR/solr/$core/"
+            # it's faster to execute cqlsh than dsetool, but it's internal info
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/config.xml" 2>&1
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+            #$BIN_DIR/dsetool get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
+            #$BIN_DIR/dsetool get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+            $BIN_DIR/dsetool list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
+            if [ "$MODE" = "extended" ]; then
+                $BIN_DIR/dsetool core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
+                $BIN_DIR/dsetool list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
+            fi
+        done
+    elif [ -n "$IS_COSS" ]; then
         if [ -f /etc/default/cassandra ]; then
             cp /etc/default/cassandra $DATA_DIR/conf/cassandra/default
         fi
@@ -645,7 +663,7 @@ function create_archive {
 }
 
 function cleanup {
-    [ -n "$VERBOSE" ] && echo "Removing temp directory $TMP_DIR"
+    debug "Removing temp directory $TMP_DIR"
     rm -rf "$TMP_DIR"
 }
 

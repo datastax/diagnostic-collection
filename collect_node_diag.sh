@@ -259,10 +259,49 @@ function collect_system_info() {
         vmstat  -w -t -a > $DATA_DIR/os-metrics/wmstat-mem 2>&1
         vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
         vmstat  -w -t -d > $DATA_DIR/os-metrics/wmstat-disk 2>&1
-        sysctl -a > $DATA_DIR/os-metrics/sysctl 2>&1
-        lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
+        if [ -n "$(command -v lscpu)" ]; then
+            lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
+        else
+            cat /proc/cpuinfo $DATA_DIR/os-metrics/lscpu 2>&1
+        fi
+        if [ -n "$(command -v numactl)" ]; then
+            numactl -show > $DATA_DIR/os-metrics/numactl 2>&1
+        fi
+        # collect information about CPU frequency, etc.
+        if [ -d /sys/devices/system/cpu/cpu0/cpufreq/ ]; then
+            for i in /sys/devices/system/cpu/cpu[0-9]*; do
+                CPUN="$(basename "$i")"
+                for file in $i/cpufreq/*; do
+                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/$CPUN"
+                done
+            done
+        fi
+        if [ -f /proc/sys/vm/zone_reclaim_mode ]; then
+            cat /proc/sys/vm/zone_reclaim_mode > $DATA_DIR/os-metrics/zone_reclaim_mode
+        fi
+        if [ -f /etc/fstab ]; then
+            cp /etc/fstab $DATA_DIR/os-metrics/fstab
+        fi
+        lsblk > $DATA_DIR/os-metrics/lsblk
+        for i in /sys/block/*; do
+            DSK="$(basename "$i")"
+            for file in $i/queue/*; do
+                if [ -f "$file" ]; then
+                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/disk_$DSK"
+                fi
+            done
+        done
+        if [ -d /sys/devices/system/clocksource/clocksource0/ ]; then
+            echo "available: $(cat /sys/devices/system/clocksource/clocksource0/available_clocksource)" > $DATA_DIR/os-metrics/clocksource
+            echo "current: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)" >> $DATA_DIR/os-metrics/clocksource
+        fi
+        dmesg -T > $DATA_DIR/os-metrics/dmesg
+        ifconfig > $DATA_DIR/os-metrics/ifconfig
+        sudo netstat -laputen 2>&1|tee > $DATA_DIR/os-metrics/netstat
     fi
     df -k > $DATA_DIR/os-metrics/df 2>&1
+    sysctl -a > $DATA_DIR/os-metrics/sysctl 2>&1
+    
     # Collect uname info (for Linux)
     [ -n "$VERBOSE" ] && echo "Collecting uname info..."
     if [ "$HOST_OS" = "Linux" ]; then

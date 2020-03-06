@@ -17,7 +17,8 @@ function usage() {
     echo "   -f file_name - name of resulting file"
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
-    echo "   -o output_dir - where to put generated files. default: /var/tmp"
+    echo "   -o output_dir - where to put generated files. Default: /var/tmp"
+    echo "   -m collection_mode - normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
@@ -54,14 +55,11 @@ JCMD="$JAVA_HOME/bin/jcmd"
 DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
 MODE="normal"
 
-# settings overridable via environment variables
-IOSTAT_LEN="${IOSTAT_LEN:-10}"
-
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hivn:c:p:f:d:o:t:I:" opt; do
+while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -79,6 +77,13 @@ while getopts ":hivn:c:p:f:d:o:t:I:" opt; do
            ;;
         I) INSIGHTS_DIR="$OPTARG"
             ;;
+        m) MODE="$OPTARG"
+           if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ]; then
+               echo "Incorrect collection mode: $MODE"
+               usage
+               exit 1
+           fi
+           ;;
         t) TYPE=$OPTARG
            ;;
         v) VERBOSE=true
@@ -98,6 +103,13 @@ ROOT_DIR="$1"
 mkdir -p "${OUTPUT_DIR}"
 
 [ -n "${ROOT_DIR}" ] && echo "Using ${ROOT_DIR} as root dir for DSE/DDAC/C*"
+
+# settings overridable via environment variables
+if [ "$MODE" = "extended" ]; then
+    IOSTAT_LEN="${IOSTAT_LEN:-30}"
+else
+    IOSTAT_LEN="${IOSTAT_LEN:-5}"
+fi
 
 function debug {
     if [ -n "$VERBOSE" ]; then
@@ -291,12 +303,12 @@ function collect_system_info() {
         fi
         free > $DATA_DIR/os-metrics/free 2>&1
         if [ -n "$(command -v iostat)" ]; then
-            iostat -ymxt 1 $IOSTAT_LEN > $DATA_DIR/os-metrics/iostat 2>&1
+            iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
         fi
         if [ -n "$(command -v vmstat)" ]; then
-            vmstat  -w -t -a > $DATA_DIR/os-metrics/wmstat-mem 2>&1
+            vmstat  -w -t -a 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-mem 2>&1
             vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
-            vmstat  -w -t -d > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+            vmstat  -w -t -d 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-disk 2>&1
         fi
         if [ -n "$(command -v lscpu)" ]; then
             lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
@@ -495,9 +507,11 @@ function collect_data {
         $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
     done
     
-    for i in tablestats tpstats ; do
-        $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
-    done
+    if [ "$MODE" = "extended" ]; then
+        for i in tablestats tpstats ; do
+            $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
+        done
+    fi
     
     # collecting schema
     debug "Collecting schema info..."
@@ -520,11 +534,11 @@ function collect_data {
     if [ -z "$CASS_DSE_LOG_DIR" ]; then
         CASS_DSE_LOG_DIR="$LOG_DIR"
     fi
-    for i in debug.log system.log gc.log output.log gremlin.log dse-collectd.log; do
-        if [ -f "$CASS_DSE_LOG_DIR/$i" ]; then
-            cp "$CASS_DSE_LOG_DIR/$i" $DATA_DIR/logs/cassandra/
-        fi
-    done
+    find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log -a -type f -exec cp {} $DATA_DIR/logs/cassandra/ \;
+
+    if [ "$MODE" = "extended" ]; then
+        find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log\.\* -a -type f -exec cp {} $DATA_DIR/logs/cassandra/ \;
+    fi
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         GC_LOG="$(sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|' < "$DATA_DIR/java_cmdline")"
         if [ -n "$GC_LOG" ] && [ -f "$GC_LOG" ]; then
@@ -548,6 +562,11 @@ function collect_data {
         #     # fi
         # fi
 
+        if [ -f "$CASS_DSE_LOG_DIR/audit/dropped-events.log" ]; then
+            mkdir -p "$DATA_DIR/logs/cassandra/audit"
+            cp "$CASS_DSE_LOG_DIR/audit/dropped-events.log" "$DATA_DIR/logs/cassandra/audit"
+        fi
+        
         # Versions to determine if nodesync available
         DSE_VERSION="$($BIN_DIR/dse -v)"
         DSE_MAJOR_VERSION="$(echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|')"
@@ -559,9 +578,9 @@ function collect_data {
             $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
         done
 
-        $BIN_DIR/dsetool insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
-        $BIN_DIR/dsetool insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
-        $BIN_DIR/dsetool cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
+        $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
+        $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
+        $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
 
         # collect nodesync rate
         if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
@@ -576,12 +595,12 @@ function collect_data {
             # it's faster to execute cqlsh than dsetool, but it's internal info
             $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/solrconfig.xml" 2>&1
             $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
-            #$BIN_DIR/dsetool get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
-            #$BIN_DIR/dsetool get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
-            $BIN_DIR/dsetool list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
+            #$BIN_DIR/dsetool $DT_OPTS get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
+            #$BIN_DIR/dsetool $DT_OPTS get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+            $BIN_DIR/dsetool $DT_OPTS list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
             if [ "$MODE" = "extended" ]; then
-                $BIN_DIR/dsetool core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
-                $BIN_DIR/dsetool list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
+                $BIN_DIR/dsetool $DT_OPTS core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
+                $BIN_DIR/dsetool $DT_OPTS list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
             fi
         done
     elif [ -n "$IS_COSS" ]; then
@@ -603,9 +622,8 @@ function collect_insights {
                     if [[ $name != \#* ]];
                     then
                         awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
-                        if [[ $name == data_dir* ]];
-       	                then
-	                    INSIGHTS_LOG_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"/insights 
+                        if [[ $name == data_dir* ]]; then
+	                    INSIGHTS_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"/insights 
                             break	    
                         fi
                     fi
@@ -668,6 +686,8 @@ function cleanup {
 }
 
 # Call functions in order
+
+debug "Collection mode: $MODE"
 detect_install
 set_paths
 get_node_ip

@@ -3,13 +3,13 @@ installations, similar (and partially compatible) to diagnostic tarball generate
 OpsCenter. (scripts were tested on MacOS and on Ubuntu Linux).
 
 Generation of diagnostic tarball for DSE/DDAC consists of 2 parts:
-1. Collection of data on individual nodes
+1. Collection of data on individual nodes;
 2. Merging all data into single file
 
-These 2 steps are separate because admins are using different ways to access nodes in the
-cluster, and transferring the data.  We're providing the sample script that allows to
-perform the data collection from cluster nodes - see description of the `collect_diag.sh`
-script.
+These 2 steps are separate because administrators may have different ways to access nodes
+in the cluster, and transferring the data.  We're providing the sample script that allows
+to perform the data collection from cluster nodes - see [description of the
+`collect_diag.sh` script below](#collect_diag.sh).
 
 ## Collecting diagnostic on individual nodes
 
@@ -40,6 +40,9 @@ Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of options):
   some automation);
 * `-i` - specifies that we need to collect data for DataStax Insights.
 * `-t` - specifies the type of installation: `dse`, `ddac`, `coss` (default: `dse`);
+* `-m` - specifies the collection mode: `normal`, `extended`. (default: `normal`). In
+  extended mode we're collecting more information, such as, all Cassandra logs, but it
+  could be significantly slower, and generate bigger archive;
 * `-v` - enables more verbose output by all scripts
 
 After successful execution, script generates file with name
@@ -94,6 +97,7 @@ Usage: ./collect_diag.sh -t <type> [options] [path]
    -r - remove collected files after generation of resulting tarball
    -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP
    -u timeout - timeout for PSSH/SSH in seconds (default: 600)
+   -m collection_mode - normal, extended. Default: normal
    -v - verbose output
    path - top directory of COSS, DDAC or DSE installation (for tarball installs)
 ```

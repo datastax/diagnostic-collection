@@ -445,6 +445,7 @@ function collect_system_info() {
     fi
     # Collect JVM system info (for Linux)
     debug "Collecting jvm system info..."
+    java -version 2>&1 > $DATA_DIR/java_version.txt
     if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ "$MODE" != "light" ]; then
         if [ -n "$IS_PACKAGE" ]; then
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt

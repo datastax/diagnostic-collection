@@ -300,10 +300,14 @@ function collect_system_info() {
         cat /sys/kernel/mm/transparent_hugepage/defrag > $DATA_DIR/os-metrics/hugepage_defrag 2>&1
         if [ -n "$(command -v blockdev)" ]; then
             sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report
+        else
+            echo "Please install 'blockdev' to collect data about devices"
         fi
         free > $DATA_DIR/os-metrics/free 2>&1
         if [ -n "$(command -v iostat)" ] && [ "$MODE" != "light" ]; then
             iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
+        else
+            echo "Please install 'iostat' to collect data about I/O activity"
         fi
         if [ -n "$(command -v vmstat)" ]; then
             vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
@@ -311,6 +315,8 @@ function collect_system_info() {
                 vmstat  -w -t -a 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-mem 2>&1
                 vmstat  -w -t -d 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-disk 2>&1
             fi
+        else
+            echo "Please install 'vmstat' to collect data about Linux"
         fi
         if [ -n "$(command -v lscpu)" ]; then
             lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
@@ -319,6 +325,8 @@ function collect_system_info() {
         fi
         if [ -n "$(command -v numactl)" ]; then
             numactl -show > $DATA_DIR/os-metrics/numactl 2>&1
+        else
+            echo "Please install 'numactl' to collect data about NUMA subsystem"
         fi
         # collect information about CPU frequency, etc.
         if [ -d /sys/devices/system/cpu/cpu0/cpufreq/ ]; then
@@ -360,6 +368,8 @@ function collect_system_info() {
         fi
         if [ -n "$(command -v netstat)" ]; then
             sudo netstat -laputen 2>&1|tee > $DATA_DIR/os-metrics/netstat
+        else
+            echo "Please install 'netstat' to collect data about network connections"
         fi
     fi
     df -k > $DATA_DIR/os-metrics/df 2>&1
@@ -580,7 +590,7 @@ function collect_data {
             $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
         fi
         
-        for i in status ring partitioner ; do
+        for i in status ring ; do
             $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
         done
 

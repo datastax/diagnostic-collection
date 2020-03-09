@@ -18,7 +18,7 @@ function usage() {
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
     echo "   -o output_dir - where to put generated files. Default: /var/tmp"
-    echo "   -m collection_mode - normal, extended. Default: normal"
+    echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
@@ -78,7 +78,7 @@ while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
         I) INSIGHTS_DIR="$OPTARG"
             ;;
         m) MODE="$OPTARG"
-           if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ]; then
+           if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
                echo "Incorrect collection mode: $MODE"
                usage
                exit 1
@@ -302,13 +302,15 @@ function collect_system_info() {
             sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report
         fi
         free > $DATA_DIR/os-metrics/free 2>&1
-        if [ -n "$(command -v iostat)" ]; then
+        if [ -n "$(command -v iostat)" ] && [ "$MODE" != "light" ]; then
             iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
         fi
         if [ -n "$(command -v vmstat)" ]; then
-            vmstat  -w -t -a 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-mem 2>&1
             vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
-            vmstat  -w -t -d 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+            if [ "$MODE" != "light" ]; then
+                vmstat  -w -t -a 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-mem 2>&1
+                vmstat  -w -t -d 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+            fi
         fi
         if [ -n "$(command -v lscpu)" ]; then
             lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
@@ -320,10 +322,11 @@ function collect_system_info() {
         fi
         # collect information about CPU frequency, etc.
         if [ -d /sys/devices/system/cpu/cpu0/cpufreq/ ]; then
+            mkdir -p $DATA_DIR/os-metrics/cpus/
             for i in /sys/devices/system/cpu/cpu[0-9]*; do
                 CPUN="$(basename "$i")"
                 for file in $i/cpufreq/*; do
-                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/$CPUN"
+                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/cpus/$CPUN"
                 done
             done
         fi
@@ -338,9 +341,10 @@ function collect_system_info() {
         fi
         for i in /sys/block/*; do
             DSK="$(basename "$i")"
+            mkdir -p $DATA_DIR/os-metrics/disks/
             for file in $i/queue/*; do
                 if [ -f "$file" ]; then
-                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/disk_$DSK"
+                    echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/disks/$DSK"
                 fi
             done
         done
@@ -431,7 +435,7 @@ function collect_system_info() {
     fi
     # Collect JVM system info (for Linux)
     debug "Collecting jvm system info..."
-    if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ]; then
+    if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ "$MODE" != "light" ]; then
         if [ -n "$IS_PACKAGE" ]; then
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > $DATA_DIR/java_command_line.txt
@@ -455,13 +459,13 @@ function collect_system_info() {
         # necessary.
         if [ -n "$DATA_CONF" ]; then
             echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
-        else
+        elif [ -f $DATA_DIR/java_command_line.txt ]; then
             DATA_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
             echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
         fi
         if [ -n "$COMMITLOG_CONF" ]; then
             echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
-        else
+        elif [ -f $DATA_DIR/java_command_line.txt ]; then
             COMMITLOG_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
             echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
         fi
@@ -572,19 +576,22 @@ function collect_data {
         DSE_MAJOR_VERSION="$(echo $DSE_VERSION|sed -e 's|^\([0-9]\)\..*$|\1|')"
 
         debug "Collecting DSE information..."
-        $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
-
+        if [ "$MODE" != "light" ]; then
+            $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
+        fi
+        
         for i in status ring partitioner ; do
             $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
         done
 
-        $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
-        $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
-        $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
-
-        # collect nodesync rate
-        if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
-            $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
+        if [ "$MODE" != "light" ]; then
+            $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
+            $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
+            $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
+            # collect nodesync rate
+            if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
+                $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
+            fi
         fi
 
         # collect DSE Search data
@@ -595,9 +602,11 @@ function collect_data {
             # it's faster to execute cqlsh than dsetool, but it's internal info
             $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/solrconfig.xml" 2>&1
             $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
-            #$BIN_DIR/dsetool $DT_OPTS get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
-            #$BIN_DIR/dsetool $DT_OPTS get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
-            $BIN_DIR/dsetool $DT_OPTS list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
+            if [ "$MODE" != "light" ]; then
+                #$BIN_DIR/dsetool $DT_OPTS get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
+                #$BIN_DIR/dsetool $DT_OPTS get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+                $BIN_DIR/dsetool $DT_OPTS list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
+            fi
             if [ "$MODE" = "extended" ]; then
                 $BIN_DIR/dsetool $DT_OPTS core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
                 $BIN_DIR/dsetool $DT_OPTS list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1

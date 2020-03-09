@@ -40,9 +40,13 @@ Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of options):
   some automation);
 * `-i` - specifies that we need to collect data for DataStax Insights.
 * `-t` - specifies the type of installation: `dse`, `ddac`, `coss` (default: `dse`);
-* `-m` - specifies the collection mode: `normal`, `extended`. (default: `normal`). In
-  extended mode we're collecting more information, such as, all Cassandra logs, but it
-  could be significantly slower, and generate bigger archive;
+* `-m` - specifies the collection mode: `light`, `normal`, `extended`. (default:
+ `normal`):
+ * `light` - collect only necessary information - logs, schema, nodetool, base system
+ information;
+ * `normal` - as previous, plus extended system information (iostat, vmstat, ...);
+ * `extended` - all Cassandra logs, longer vmstat/iostat, etc. It could be significantly
+   slower, and will generate bigger archive;
 * `-v` - enables more verbose output by all scripts
 
 After successful execution, script generates file with name
@@ -97,7 +101,7 @@ Usage: ./collect_diag.sh -t <type> [options] [path]
    -r - remove collected files after generation of resulting tarball
    -s ssh/pssh/scp options - options to pass to SSH/PSSH/SCP
    -u timeout - timeout for PSSH/SSH in seconds (default: 600)
-   -m collection_mode - normal, extended. Default: normal
+   -m collection_mode - light, normal, extended. Default: normal
    -v - verbose output
    path - top directory of COSS, DDAC or DSE installation (for tarball installs)
 ```

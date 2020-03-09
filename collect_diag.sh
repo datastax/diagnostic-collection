@@ -21,7 +21,7 @@ function usage() {
     echo "   -r - remove collected files after generation of resulting tarball"
     echo "   -s ssh/scp options - options to pass to SSH/SCP"
     echo "   -u timeout - timeout for SSH in seconds (default: $TIMEOUT)"
-    echo "   -m collection_mode - normal, extended. Default: normal"
+    echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
@@ -83,7 +83,7 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
         v) COLLECT_OPTS="$COLLECT_OPTS -v"
            ;;
         m) MODE="$OPTARG"
-           if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ]; then
+           if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
                echo "Incorrect collection mode: '$MODE'"
                usage
                exit 1

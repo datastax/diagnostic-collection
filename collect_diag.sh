@@ -3,6 +3,10 @@
 # File: collect_diag.sh
 #
 # Created: Friday, May 31 2019
+# Modified: $Format:%cD$ 
+# Hash: $Format:%h$
+#
+# This script collects diagnostic from multiple nodes of cluster
 ##
 
 if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then

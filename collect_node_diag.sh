@@ -3,7 +3,11 @@
 # File: collect_node_diag.sh
 #
 # Created: Wednesday, May 22 2019
+# Modified: $Format:%cD$ 
+# Hash: $Format:%h$
 #
+# This script collects diagnostic for individual node
+##
 
 function usage() {
     echo "Usage: $0 -t <type> [options] [path]"

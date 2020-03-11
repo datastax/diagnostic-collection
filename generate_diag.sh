@@ -3,7 +3,11 @@
 # File: generate_diag.sh
 #
 # Created: Wednesday, May 22 2019
+# Modified: $Format:%cD$ 
+# Hash: $Format:%h$
 #
+# This script merges diagnostic from multiple nodes into single diagnostic tarball
+##
 
 DSE_PATTERN="diag"
 INS_PATTERN="dse-insights"

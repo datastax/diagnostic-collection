@@ -294,6 +294,12 @@ function get_pid {
 function collect_system_info() {
     debug "Collecting OS level info..."
     if [ "$HOST_OS" = "Linux" ]; then
+        if [ -f /etc/lsb-release ]; then
+            cp /etc/lsb-release $DATA_DIR/os-metrics/
+        fi
+        if [ -f /etc/os-release ]; then
+            cp /etc/os-release $DATA_DIR/
+        fi
         if [ -n "$PID" ]; then
             cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
         fi
@@ -304,8 +310,10 @@ function collect_system_info() {
             echo "Please install 'blockdev' to collect data about devices"
         fi
         free > $DATA_DIR/os-metrics/free 2>&1
-        if [ -n "$(command -v iostat)" ] && [ "$MODE" != "light" ]; then
-            iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
+        if [ -n "$(command -v iostat)" ]; then
+            if [ "$MODE" != "light" ]; then
+                iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
+            fi
         else
             echo "Please install 'iostat' to collect data about I/O activity"
         fi
@@ -445,7 +453,7 @@ function collect_system_info() {
     fi
     # Collect JVM system info (for Linux)
     debug "Collecting jvm system info..."
-    java -version 2>&1 > $DATA_DIR/java_version.txt
+    java -version > $DATA_DIR/java_version.txt 2>&1
     if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ "$MODE" != "light" ]; then
         if [ -n "$IS_PACKAGE" ]; then
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
@@ -500,7 +508,7 @@ function collect_system_info() {
 
 # Collects data from nodes
 function collect_data {
-    echo "Collectihg data from node..."
+    echo "Collectihg data from node $NODE_ADDR..."
 
     if [ -n "$PID" ]; then
         if [ -n "$IS_DSE" ]; then

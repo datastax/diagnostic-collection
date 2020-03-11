@@ -294,6 +294,54 @@ function get_pid {
     fi
 }
 
+# try to detect if we're running in the cloud, and then collect more cloud-specific information
+function collect_cloud_info() {
+    CLOUD="none"
+    if [ -f /sys/hypervisor/uuid ]; then
+        if [[ "$(cat /sys/hypervisor/uuid)" =~ ec2.* ]]; then
+            CLOUD="AWS"
+        fi
+    fi
+    if [ "$CLOUD" = "none" ] && [ -n "$(command -v dmidecode)" ]; then
+        BIOS_INFO="$(sudo dmidecode -s bios-version)"
+        if [[ "$BIOS_INFO" =~ .*amazon.* ]]; then
+            CLOUD="AWS"
+        elif [[ "$BIOS_INFO" =~ Google.* ]]; then
+            CLOUD="GCE"
+        elif [[ "$BIOS_INFO" =~ .*OVM.* ]]; then
+            CLOUD="Oracle"
+        fi
+    fi
+    if [ "$CLOUD" = "none" ] && [ -r /sys/devices/virtual/dmi/id/product_uuid ]; then
+        if [ "$(head -c 3 /sys/devices/virtual/dmi/id/product_uuid)" == "EC2" ]; then
+            CLOUD="AWS"
+        fi
+    fi
+    
+    debug "detected cloud provider: $CLOUD"
+    echo "cloud provider: $CLOUD" > $DATA_DIR/os-metrics/cloud_info
+    if [ "$CLOUD" = "AWS" ]; then
+        {
+            echo "instance type: $(curl -s http://169.254.169.254/latest/meta-data/instance-type)"
+            echo "availability zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)"
+            echo "public hostname: $(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+            echo "public IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+            echo "private hostname: $(curl -s http://169.254.169.254/latest/meta-data/hostname)"
+            echo "private IP: $(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)"
+        } >> $DATA_DIR/os-metrics/cloud_info
+    fi
+    if [ "$CLOUD" = "GCE" ]; then
+        {
+            echo "instance type: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/machine-type|sed -e 's|^.*/\([^/]*\)$|\1|')"
+        echo "availability zone: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/zone|sed -e 's|^.*/\([^/]*\)$|\1|')"
+#        echo "public hostname: "
+        echo "public IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)"
+        echo "private hostname: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/hostname)"
+        echo "private IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
+        } >> $DATA_DIR/os-metrics/cloud_info
+    fi
+}
+
 # Collects OS info
 function collect_system_info() {
     debug "Collecting OS level info..."
@@ -312,6 +360,9 @@ function collect_system_info() {
             sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report
         else
             echo "Please install 'blockdev' to collect data about devices"
+        fi
+        if [ -n "$(command -v dmidecode)" ]; then
+            sudo dmidecode |tee > $DATA_DIR/os-metrics/dmidecode
         fi
         free > $DATA_DIR/os-metrics/free 2>&1
         if [ -n "$(command -v iostat)" ]; then
@@ -390,22 +441,26 @@ function collect_system_info() {
     # Collect uname info (for Linux)
     debug "Collecting uname info..."
     if [ "$HOST_OS" = "Linux" ]; then
-        echo "kernel_name: $(uname -s)" > $DATA_DIR/os-info.txt 2>&1
-        echo "node_name: $(uname -n)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "kernel_release: $(uname -r)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "kernel_version: $(uname -v)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "machine_type: $(uname -m)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "processor_type: $(uname -p)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "platform_type: $(uname -i)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "os_type: $(uname -o)" >> $DATA_DIR/os-info.txt 2>&1
+        {
+            echo "kernel_name: $(uname -s)"
+            echo "node_name: $(uname -n)"
+            echo "kernel_release: $(uname -r)"
+            echo "kernel_version: $(uname -v)"
+            echo "machine_type: $(uname -m)"
+            echo "processor_type: $(uname -p)"
+            echo "platform_type: $(uname -i)"
+            echo "os_type: $(uname -o)"
+        } > $DATA_DIR/os-info.txt 2>&1
     # Collect uname info (for MacOS)
     elif [ "$HOST_OS" = "Darwin" ]; then
-        echo "hardware_name: $(uname -m)" > $DATA_DIR/os-info.txt 2>&1
-        echo "node_name: $(uname -n)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "processor_type: $(uname -p)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "os_release: $(uname -r)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "os_version: $(uname -v)" >> $DATA_DIR/os-info.txt 2>&1
-        echo "os_name: $(uname -s)" >> $DATA_DIR/os-info.txt 2>&1
+        {
+            echo "hardware_name: $(uname -m)"
+            echo "node_name: $(uname -n)"
+            echo "processor_type: $(uname -p)"
+            echo "os_release: $(uname -r)"
+            echo "os_version: $(uname -v)"
+            echo "os_name: $(uname -s)"
+        } > $DATA_DIR/os-info.txt 2>&1
     else
         echo "os type $HOST_OS not catered for or detected" > $DATA_DIR/os-info.txt 2>&1
     fi 
@@ -548,6 +603,9 @@ function collect_data {
     
     # collecting process-related info
     collect_system_info
+
+    # collection of cloud-related information
+    collect_cloud_info
 
     # collect logs
     # auto-detect log directory

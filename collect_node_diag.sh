@@ -317,10 +317,21 @@ function collect_cloud_info() {
             CLOUD="AWS"
         fi
     fi
+    AZ_API_VERSION="2019-11-01"
+    if [ "$CLOUD" = "none" ]; then
+        if curl -s -m 2 http://169.254.169.254/latest/dynamic/instance-identity/document 2>&1 |grep '"availabilityZone"' > /dev/null ; then
+            CLOUD="AWS"
+        elif curl -s -m 2 -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/zone > /dev/null 2>&1 ; then
+            CLOUD="GCE"
+        elif curl -s -m 2 -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=$AZ_API_VERSION"  2>&1 |grep "azEnvironment" > /dev/null ; then
+            CLOUD="Azure"
+        fi
+    fi
     
     debug "detected cloud provider: $CLOUD"
     echo "cloud provider: $CLOUD" > $DATA_DIR/os-metrics/cloud_info
     if [ "$CLOUD" = "AWS" ]; then
+        curl -s http://169.254.169.254/latest/dynamic/instance-identity/document > $DATA_DIR/os-metrics/cloud_aws
         {
             echo "instance type: $(curl -s http://169.254.169.254/latest/meta-data/instance-type)"
             echo "availability zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)"
@@ -333,11 +344,21 @@ function collect_cloud_info() {
     if [ "$CLOUD" = "GCE" ]; then
         {
             echo "instance type: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/machine-type|sed -e 's|^.*/\([^/]*\)$|\1|')"
-        echo "availability zone: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/zone|sed -e 's|^.*/\([^/]*\)$|\1|')"
+            echo "availability zone: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/zone|sed -e 's|^.*/\([^/]*\)$|\1|')"
 #        echo "public hostname: "
-        echo "public IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)"
-        echo "private hostname: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/hostname)"
-        echo "private IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
+            echo "public IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)"
+            echo "private hostname: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/hostname)"
+            echo "private IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
+        } >> $DATA_DIR/os-metrics/cloud_info
+    fi
+    if [ "$CLOUD" = "Azure" ]; then
+        FNAME=$DATA_DIR/os-metrics/cloud_azure
+        curl -s -H Metadata:true "http://169.254.169.254/metadata/instance?api-version=$AZ_API_VERSION" > $FNAME
+        {
+            echo "instance type: $(sed -e 's|^.*"vmSize":"\([^"]*\)".*$|\1|' $FNAME)"
+            echo "availability zone: $(sed -e 's|^.*"zone":"\([^"]*\)".*$|\1|' $FNAME)"
+            echo "public IP: $(sed -e 's|^.*"publicIpAddress":"\([^"]*\)".*$|\1|' $FNAME)"
+            echo "private IP: $(sed -e 's|^.*"privateIpAddress":"\([^"]*\)".*$|\1|' $FNAME)"
         } >> $DATA_DIR/os-metrics/cloud_info
     fi
 }

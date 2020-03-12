@@ -14,7 +14,7 @@ INS_PATTERN="dse-insights"
 PATTERN=$DSE_PATTERN
 OUT_DIR="/var/tmp"
 # size of insights file chunk, in Mb
-INSIGHTS_CHUNK_SIZE=5120  # 5Gb
+INSIGHTS_CHUNK_SIZE=4500  # 4.5Gb
 #INSIGHTS_CHUNK_SIZE=500
 
 function usage() {
@@ -23,7 +23,6 @@ function usage() {
     echo "   -p file_pattern - pattern to use to find individual files (default '${PATTERN}-*.tar.gz')"
     echo "   -o output_dir - where to put resulting file"
     echo "   -i - process insights files only (default is collect DSE only)"
-    echo "   -w - process DDAC files"
     echo "   -r - remove individual diagnostic files after processing"
     echo "   -t - type, for selecting type of install"
     echo "   path_to_dir_with_diag_tarballs - path to directory with individual diagnostics"

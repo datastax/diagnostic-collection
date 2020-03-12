@@ -108,7 +108,7 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
            ;;
     esac
 done
-shift "$(($OPTIND -1))"
+shift "$((OPTIND -1))"
 echo "Using output directory: ${OUT_DIR}"
 
 # ------------------------
@@ -196,7 +196,7 @@ for host in "${hosts_success[@]}"; do
         echo "Error during execution SCP, copying data from host $host, exiting..."
         exit 1
     fi
-    if [ -n "$REMOVE_OPTS" ]; then
+    if [ -n "$REMOVE_OPTS" ] && [ "$NODE_OUT_DIR" != "/" ] ; then
         ssh $SSH_OPTS "$host" "rm -rf '$NODE_OUT_DIR'"
     fi
 done

@@ -14,8 +14,8 @@ from Mac or Linux machine outside of the cluster.
 ## collect_diag.sh
 
 This script copies the `collect_node_diag.sh` file to all nodes, executing it in parallel,
-copying back collected data, and generate resulting tarball with DSE Insights or
-diagnostic data using [`generate_diag.sh`](#merging-all-diagnostics-into-single-tarball).
+copying back collected data, and generate resulting tarball with diagnostic data using
+[`generate_diag.sh`](#merging-all-diagnostics-into-single-tarball).
 
 Usage:
 
@@ -33,8 +33,6 @@ get a list of all options):
 * `-d` - specifies the options for `dsetool` command (JMX user, password, etc.);
 * `-f` - specifies the name where it should put the collected results (could be useful for
   some automation);
-* `-i` - specifies that we need to collect data for DataStax Insights.
-* `-I` - specifies directory that contains insights `.gz` files;
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:
  `normal`). See [section below for information on what is collected](#what-is-collected):
  * `light` - collect only necessary information - logs, schema, nodetool, base system
@@ -119,8 +117,6 @@ enabled for Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of o
 * `-d` - specifies the options for `dsetool` command (JMX user, password, etc.);
 * `-f` - specifies the name where it should put the collected results (could be useful for
   some automation);
-* `-i` - specifies that we need to collect data for DataStax Insights.
-* `-I` - specifies directory that contains insights `.gz` files;
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:
  `normal`). See [section below for information on what is collected](#what-is-collected):
  * `light` - collect only necessary information - logs, schema, nodetool, base system
@@ -151,7 +147,6 @@ directory with collected files (it could be either relative, or absolute).  Ther
 optional parameters:
 
 * `-f` - specifies path to file where data should be put;
-* `-i` - specifies that we need to merge Insights data;
 * `-o` - specifies directory where to put where to put resulting file (default: `/var/tmp/`);
 * `-p` - specifies the custom pattern for file names if `collect_node_diag.sh` was called
   with `-f` parameter - otherwise this script may not find the data;
@@ -167,6 +162,5 @@ This script performs following:
   `<cluster_name>-diagnostics.tar.gz`, for example, `dsetest-diagnostics.tar.gz`, or into
   specified by `-f` option.
 
-This file could be then sent to DataStax support for analysis, or, when Insights mode is
-used, for upload to Insights.
+This file could be then sent to DataStax support for analysis.
 

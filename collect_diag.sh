@@ -22,8 +22,6 @@ function usage() {
     echo "   -c cqlsh_options - e.g \"-u user -p password\" etc. Ensure you enclose with \""
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
     echo "   -f file_name - file with list of hosts where to execute command (default - try to get list from 'nodetool status')"
-    echo "   -i insights - collect only data for DSE Insights"
-    echo "   -I insights_dir - directory that contains insights .gz files"
     echo "   -n nodetool_options - options to pass to nodetool. Syntax the same as \"-c\""
     echo "   -o output_dir - where to put resulting file (default: $OUT_DIR)"
     echo "   -p pid - PID of DSE or DDAC process"
@@ -39,6 +37,13 @@ function check_type {
     if [ "$TYPE" != "ddac" ] && [ "$TYPE" != "coss" ] && [ "$TYPE" != "dse" ]; then
         usage
         exit 1
+    fi
+}
+
+function debug {
+    if [ -n "$VERBOSE" ]; then
+        DT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        echo "[${DT}]: $1"
     fi
 }
 
@@ -58,22 +63,20 @@ NT_OPTS=""
 COLLECT_OPTS=""
 REMOVE_OPTS=""
 INSIGHT_COLLECT_OPTS=""
+VERBOSE=""
+TYPE=""
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
+while getopts ":hvrn:c:d:f:o:p:s:t:u:m:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
         d) DT_OPTS="$OPTARG"
            ;;
         f) HOST_FILE="$OPTARG"
-           ;;
-        i) COLLECT_OPTS="$COLLECT_OPTS -i"
-           ;;
-        I) INSIGHT_COLLECT_OPTS="-I '${OPTARG}'"
            ;;
         n) NT_OPTS=$OPTARG
            ;;
@@ -90,6 +93,7 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
         u) TIMEOUT=$OPTARG
            ;;
         v) COLLECT_OPTS="$COLLECT_OPTS -v"
+           VERBOSE="true"
            ;;
         m) MODE="$OPTARG"
            if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
@@ -136,7 +140,7 @@ SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o Ba
 
 declare -A servers
 for host in $(cat "$HOST_FILE"); do
-    echo "Copying collect_node_diag.sh to $host..."
+    debug "Copying collect_node_diag.sh to $host..."
     scp $SSH_OPTS collect_node_diag.sh "${host}:~/"
     RES=$?
     if [ $RES -ne 0 ]; then
@@ -149,7 +153,7 @@ for host in $(cat "$HOST_FILE"); do
         exit 1
     fi
     servers[$host]=$NODE_OUT_DIR
-    echo "host: $host out_dir=$NODE_OUT_DIR"
+    debug "host: $host out_dir=$NODE_OUT_DIR"
 done
     
 declare -A pids
@@ -162,7 +166,7 @@ done
 declare -a hosts_failed
 declare -a hosts_success
 for host in "${!pids[@]}"; do
-    echo "Going to wait for PID ${pids[$host]} for host $host"
+    debug "Going to wait for PID ${pids[$host]} for host $host"
     if wait ${pids[$host]}; then
         RES=$?
         if [ "$RES" -eq 0 ]; then
@@ -189,7 +193,7 @@ fi
 # we continue to 
 for host in "${hosts_success[@]}"; do
     NODE_OUT_DIR="${servers[$host]}"
-    echo "host: $host out_dir=$NODE_OUT_DIR"
+    debug "host: $host out_dir=$NODE_OUT_DIR"
     scp $SSH_OPTS "${host}:${NODE_OUT_DIR}/*.tar.gz" "$OUT_DIR"
     RES=$?
     if [ $RES -ne 0 ]; then

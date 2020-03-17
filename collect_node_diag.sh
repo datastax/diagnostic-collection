@@ -19,8 +19,6 @@ function usage() {
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
     echo "   -p pid - PID of DSE or DDAC/Cassandra process"
     echo "   -f file_name - name of resulting file"
-    echo "   -i insights - collect only data for DSE Insights"
-    echo "   -I insights_dir - directory to find the insights .gz files"
     echo "   -o output_dir - where to put generated files. Default: /var/tmp"
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
@@ -39,8 +37,6 @@ CQLSH_OPTS=""
 DT_OPTS=""
 PID=""
 RES_FILE=""
-INSIGHTS_MODE=""
-INSIGHTS_DIR=""
 IS_COSS=""
 IS_TARBALL=""
 IS_PACKAGE=""
@@ -56,14 +52,13 @@ TMP_DIR=""
 OLDWD="$(pwd)"
 HOST_OS="$(uname -s)"
 JCMD="$JAVA_HOME/bin/jcmd"
-DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
 MODE="normal"
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
+while getopts ":hvn:c:p:f:d:o:t:m:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -77,10 +72,6 @@ while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
            ;;
         o) OUTPUT_DIR="$OPTARG"
            ;;
-        i) INSIGHTS_MODE="true"
-           ;;
-        I) INSIGHTS_DIR="$OPTARG"
-            ;;
         m) MODE="$OPTARG"
            if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
                echo "Incorrect collection mode: $MODE"
@@ -721,59 +712,6 @@ function collect_data {
     fi
 }
 
-function collect_insights {
-    echo "Collecting insights data"
-    INSIGHTS_DIR=${INSIGHTS_DIR:-${DEFAULT_INSIGHTS_DIR}}
-    if [ "$TYPE" = "dse" ] && [ "$INSIGHTS_DIR" = "$DEFAULT_INSIGHTS_DIR" ]; then
-        # TODO: was taken from Mani's code as-is, maybe need to improve, like, read the top-level sections, etc.... 
-        while read line; do
-            name=$line
-            case $name in
-                *"$INSIGHTS_OPTIONS"*|*"$INSIGHTS_DATA_DIR"*)
-                    if [[ $name != \#* ]];
-                    then
-                        awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
-                        if [[ $name == data_dir* ]]; then
-	                    INSIGHTS_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"/insights 
-                            break	    
-                        fi
-                    fi
-            esac
-        done < $DSE_CONF_DIR/dse.yaml
-    fi
-    
-    if [ ! -d "$INSIGHTS_DIR" ]; then
-        echo "Can't find Insights directory, or it doesn't exist! $INSIGHTS_DIR"
-        exit 1
-    fi
-    if [ -z "$RES_FILE" ]; then
-        RES_FILE=$OUTPUT_DIR/dse-insights-$NODE_ADDR.tar.gz
-    fi
-    DFILES="$(ls -1 $INSIGHTS_DIR/*.gz 2>/dev/null |head -n 20)"
-    if [ -z "$DFILES" ]; then
-        echo "No Insights files in the specified directory"
-        exit 1
-    fi
-
-    NODE_ID="$($BIN_DIR/nodetool $NT_OPTS info|grep -E '^ID'|sed -e 's|^ID.*:[[:space:]]*\([0-9a-fA-F].*\)|\1|')"
-    # Node could be offline, so nodetool may not work
-    if [ -n "$NODE_ID" ]; then
-        NODE_ADDR="$NODE_ID"
-    fi
-    DATA_DIR="$TMP_DIR"/"$NODE_ADDR"
-    mkdir -p "$DATA_DIR"
-
-    # we should be careful when copying the data - list of files could be very long...
-    HAS_RSYNC="$(command -v rsync)"
-    if [ -n "$HAS_RSYNC" ]; then
-        rsync -r --include='*.gz' --exclude='*' "$INSIGHTS_DIR/" "$DATA_DIR/"
-    elif [ "$HOST_OS" = "Linux" ]; then
-        find "$INSIGHTS_DIR/" -maxdepth 1 -name '*.gz' -print0|xargs -0 cp -t "$DATA_DIR"
-    else
-        cp "$INSIGHTS_DIR"/*.gz "$DATA_DIR"
-    fi
-}
-
 function create_directories {
     # Common for COSS / DDAC & DSE
     mkdir -p "$DATA_DIR"/{logs/cassandra,nodetool,conf/cassandra,driver,os-metrics,ntp}
@@ -805,13 +743,7 @@ get_node_ip
 DATA_DIR="$TMP_DIR/$NODE_ADDR"
 get_pid
 create_directories
-
-if [ -n "$INSIGHTS_MODE" ]; then
-    collect_insights
-else
-    collect_data
-fi
-
+collect_data
 create_archive
 cleanup
 

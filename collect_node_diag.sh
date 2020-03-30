@@ -114,12 +114,12 @@ function debug {
 }
 
 function get_node_ip {
-    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
     if [ -z "$CONN_ADDR" ]; then
-        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
     fi
     if [ -z "$CONN_ADDR" ]; then
-        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1)"
+        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
                 CONN_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
@@ -129,9 +129,9 @@ function get_node_ip {
         fi
     fi
     # extract listen address
-    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
     if [ -z "$NODE_ADDR" ]; then
-        IFACE="$(grep -E '^listen_interface: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+        IFACE="$(grep -E '^listen_interface: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
                 NODE_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
@@ -140,7 +140,7 @@ function get_node_ip {
             fi
         fi
         if [ -z "$NODE_ADDR" ]; then
-            NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|')"
+            NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
             if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
                 #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
                 if [ "$HOST_OS" = "Linux" ]; then

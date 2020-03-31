@@ -486,6 +486,16 @@ function collect_system_info() {
             ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
         fi
     fi
+    # Collect Chrony info (for Linux)
+    debug "Collecting Chrony info..."
+    if [ "$HOST_OS" = "Linux" ]; then
+        if [ -n "$(command -v chronyc)" ]; then
+            mkdir -p "$DATA_DIR"/os-metrics/chrony
+            chronyc tracking > $DATA_DIR/os-metrics/chrony/tracking 2>&1
+            chronyc sources -v > $DATA_DIR/os-metrics/chrony/sources 2>&1
+            chronyc sourcestats -v $DATA_DIR/os-metrics/chrony/sourcestats 2>&1
+        fi
+    fi
     # Collect TOP info (for Linux)
     debug "Collecting top info..."
     if [ "$HOST_OS" = "Linux" ]; then

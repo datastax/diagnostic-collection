@@ -106,6 +106,11 @@ else
     IOSTAT_LEN="${IOSTAT_LEN:-5}"
 fi
 
+MAYBE_RUN_WITH_TIMEOUT=""
+if [ -n "$(command -v timeout)" ]; then
+    MAYBE_RUN_WITH_TIMEOUT="timeout --foreground 30"
+fi
+
 function debug {
     if [ -n "$VERBOSE" ]; then
         DT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
@@ -608,20 +613,20 @@ function collect_data {
     # collecting nodetool information
     debug "Collecting nodetool output..."
     for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
-        $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
+        $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
     done
     
     if [ "$MODE" = "extended" ]; then
         for i in tablestats tpstats ; do
-            $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
         done
     fi
     
     # collecting schema
     debug "Collecting schema info..."
-    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
-    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
-    $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
     
     # collecting process-related info
     collect_system_info
@@ -680,20 +685,20 @@ function collect_data {
 
         debug "Collecting DSE information..."
         if [ "$MODE" != "light" ]; then
-            $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
         fi
         
         for i in status ring ; do
-            $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
         done
 
         if [ "$MODE" != "light" ]; then
-            $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
-            $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
-            $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
             # collect nodesync rate
             if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
-                $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
+                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
             fi
         fi
 
@@ -708,11 +713,11 @@ function collect_data {
             if [ "$MODE" != "light" ]; then
                 #$BIN_DIR/dsetool $DT_OPTS get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
                 #$BIN_DIR/dsetool $DT_OPTS get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
-                $BIN_DIR/dsetool $DT_OPTS list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
+                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS list_core_properties "$core" > "$DATA_DIR/solr/$core/properties" 2>&1
             fi
             if [ "$MODE" = "extended" ]; then
-                $BIN_DIR/dsetool $DT_OPTS core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
-                $BIN_DIR/dsetool $DT_OPTS list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
+                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS core_indexing_status "$core" > "$DATA_DIR/solr/$core/status" 2>&1
+                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
             fi
         done
     elif [ -n "$IS_COSS" ]; then

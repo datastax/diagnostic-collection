@@ -283,10 +283,19 @@ function detect_install {
 }
 
 function get_pid {
-    if [ -z "$PID" ] && [ -n "$IS_COSS" ] ; then
-        PID="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
-    elif [ -z "$PID" ] && [ -n "$IS_DSE" ]; then
-        PID="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+    if [ -z "$PID" ]; then
+        if [ -n "$IS_COSS" ] ; then
+            PID="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+        else
+            PID="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+        fi
+    fi
+    if [ -n "$PID" ]; then
+        if [ -n "$IS_DSE" ]; then
+            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
+        else
+            ps -aef|grep "$PID"|grep CassandraDaemon > $DATA_DIR/java_cmdline
+        fi
     fi
 }
 
@@ -646,14 +655,6 @@ function collect_system_info() {
 function collect_data {
     echo "Collectihg data from node $NODE_ADDR..."
 
-    if [ -n "$PID" ]; then
-        if [ -n "$IS_DSE" ]; then
-            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
-        else
-            ps -aef|grep "$PID"|grep CassandraDaemon > $DATA_DIR/java_cmdline
-        fi
-    fi
-
     for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml; do
         if [ -f "$CONF_DIR/$i" ] ; then
             cp $CONF_DIR/$i $DATA_DIR/conf/cassandra/
@@ -799,6 +800,39 @@ function cleanup {
     rm -rf "$TMP_DIR"
 }
 
+function adjust_nodetool_params {
+    local jmx_port=7199
+    local jmx_host=127.0.0.1
+    local tmp=""
+    if [ -f "$DATA_DIR/java_cmdline" ]; then
+        tmp=$(grep 'cassandra.jmx.local.port=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
+        if [ -n "$tmp" ]; then
+            jmx_port="$tmp"
+        else
+            tmp=$(grep 'cassandra.jmx.remote.port=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
+            if [ -n "$tmp" ]; then
+                jmx_port="$tmp"
+            fi
+            tmp=$(grep 'java.rmi.server.hostname=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
+            if [ -n "$tmp" ]; then
+                jmx_host="$tmp"
+            fi
+        fi
+    fi
+    if [ -n "$(command -v nc)" ]; then
+        if ! nc -z "$jmx_host" "$jmx_port" ; then
+            echo "JMX isn't available at $jmx_host:$jmx_port"
+        fi
+    fi
+        
+    if [ "$jmx_port" != "7199" ]; then
+        NT_OPTS="$NT_OPTS -p $jmx_port"
+    fi
+    if [ "$jmx_host" != "127.0.01" ]; then
+        NT_OPTS="$NT_OPTS -h $jmx_host"
+    fi
+}
+
 # Call functions in order
 
 debug "Collection mode: $MODE"
@@ -806,8 +840,9 @@ detect_install
 set_paths
 get_node_ip
 DATA_DIR="$TMP_DIR/$NODE_ADDR"
-get_pid
 create_directories
+get_pid
+adjust_nodetool_params
 collect_data
 create_archive
 cleanup

@@ -138,10 +138,12 @@ fi
 # TODO: calculate ServerAliveCountMax based on the timeout & ServerAliveInterval...
 SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=40"
 
+[[ $0 == */* ]] && LAUNCH_PATH=${0%/*}/ || LAUNCH_PATH=./
+
 declare -A servers
 for host in $(cat "$HOST_FILE"); do
     debug "Copying collect_node_diag.sh to $host..."
-    scp $SSH_OPTS collect_node_diag.sh "${host}:~/"
+    scp $SSH_OPTS ${LAUNCH_PATH}collect_node_diag.sh "${host}:~/"
     RES=$?
     if [ $RES -ne 0 ]; then
         echo "Error during execution SCP, copying script to host $host, exiting..."
@@ -205,7 +207,7 @@ for host in "${hosts_success[@]}"; do
     fi
 done
 
-./generate_diag.sh -o "$OUT_DIR" -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
+${LAUNCH_PATH}generate_diag.sh -o "$OUT_DIR" -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
 
 # do cleanup
 if [ -n "$TMP_HOST_FILE" ]; then

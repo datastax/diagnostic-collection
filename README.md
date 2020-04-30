@@ -162,5 +162,5 @@ This script performs following:
   `<cluster_name>-diagnostics.tar.gz`, for example, `dsetest-diagnostics.tar.gz`, or into
   specified by `-f` option.
 
-This file could be then sent for analysis to DataStax support, or analyzed by tools, like, [sperf](https://github.com/riptano/sperf).
+This file could be then sent for analysis to DataStax support, or analyzed by tools, like, [sperf](https://github.com/DataStax-Toolkit/sperf).
 

@@ -35,10 +35,10 @@ get a list of all options):
   some automation);
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:
  `normal`). See [section below for information on what is collected](#what-is-collected):
- * `light` - collect only necessary information - logs, schema, nodetool, base system
+  * `light` - collect only necessary information - logs, schema, nodetool, base system
  information;
- * `normal` - as previous, plus extended system information (iostat, vmstat, ...);
- * `extended` - all Cassandra logs, longer vmstat/iostat, etc. It could be significantly
+  * `normal` - as previous, plus extended system information (iostat, vmstat, ...);
+  * `extended` - all Cassandra logs, longer vmstat/iostat, etc. It could be significantly
    slower, and will generate bigger archive;
 * `-n` - specifies a list of general options to pass to `nodetool` (JMX user, password, etc.);
 * `-o` - specifies directory where to put where to put resulting file (default:

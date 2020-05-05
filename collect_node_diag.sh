@@ -662,7 +662,7 @@ function collect_system_info() {
 
 # Collects data from nodes
 function collect_data {
-    echo "Collectihg data from node $NODE_ADDR..."
+    echo "Collecting data from node $NODE_ADDR..."
 
     for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml jvm-clients.options jvm-server.options jvm11-clients.options jvm11-server.options jvm8-clients.options jvm8-server.options; do
         if [ -f "$CONF_DIR/$i" ] ; then

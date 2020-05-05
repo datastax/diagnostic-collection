@@ -22,6 +22,8 @@ function usage() {
     echo "   -c cqlsh_options - e.g \"-u user -p password\" etc. Ensure you enclose with \""
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
     echo "   -f file_name - file with list of hosts where to execute command (default - try to get list from 'nodetool status')"
+    echo "   -i insights - collect only data for DSE Insights"
+    echo "   -I insights_dir - directory that contains insights .gz files"
     echo "   -n nodetool_options - options to pass to nodetool. Syntax the same as \"-c\""
     echo "   -o output_dir - where to put resulting file (default: $OUT_DIR)"
     echo "   -p pid - PID of DSE or DDAC process"
@@ -70,13 +72,17 @@ TYPE=""
 # Parse arguments
 # ---------------
 
-while getopts ":hvrn:c:d:f:o:p:s:t:u:m:" opt; do
+while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
         d) DT_OPTS="$OPTARG"
            ;;
         f) HOST_FILE="$OPTARG"
+           ;;
+        i) COLLECT_OPTS="$COLLECT_OPTS -i"
+           ;;
+        I) INSIGHT_COLLECT_OPTS="-I '${OPTARG}'"
            ;;
         n) NT_OPTS=$OPTARG
            ;;
@@ -143,7 +149,7 @@ SSH_OPTS="$SSH_OPTS -o StrictHostKeyChecking=no -o ConnectTimeout=$TIMEOUT -o Ba
 declare -A servers
 for host in $(cat "$HOST_FILE"); do
     debug "Copying collect_node_diag.sh to $host..."
-    scp $SSH_OPTS ${LAUNCH_PATH}collect_node_diag.sh "${host}:~/"
+    scp $SSH_OPTS "${LAUNCH_PATH}collect_node_diag.sh" "${host}:~/"
     RES=$?
     if [ $RES -ne 0 ]; then
         echo "Error during execution SCP, copying script to host $host, exiting..."

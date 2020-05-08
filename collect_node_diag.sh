@@ -484,7 +484,13 @@ function collect_system_info() {
 
         for i in /sys/block/*; do
             DSK="$(basename "$i")"
-            mkdir -p $DATA_DIR/os-metrics/disks/
+            if [[ "$DSK" =~ loop* ]]; then
+                continue
+            fi
+            mkdir -p "$DATA_DIR/os-metrics/disks/"
+            if [ -n "$(command -v smartctl)" ] && [ -b "/dev/$DSK" ]; then
+                sudo smartctl -H -i "$DM" 2>&1|tee "$DATA_DIR/os-metrics/disks/smartctl-$DSK"
+            fi
             for file in $i/queue/*; do
                 if [ -f "$file" ]; then
                     echo "$(basename "$file"): $(cat "$file" 2>/dev/null)" >> "$DATA_DIR/os-metrics/disks/$DSK"

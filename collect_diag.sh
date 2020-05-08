@@ -32,6 +32,7 @@ function usage() {
     echo "   -u timeout - timeout for SSH in seconds (default: $TIMEOUT)"
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
+    echo "   -z - don't execute commands that require sudo"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
@@ -72,7 +73,7 @@ TYPE=""
 # Parse arguments
 # ---------------
 
-while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
+while getopts ":hzivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
@@ -100,6 +101,8 @@ while getopts ":hivrn:c:d:f:o:p:s:t:u:I:m:" opt; do
            ;;
         v) COLLECT_OPTS="$COLLECT_OPTS -v"
            VERBOSE="true"
+           ;;
+        z) COLLECT_OPTS="$COLLECT_OPTS -z"
            ;;
         m) MODE="$OPTARG"
            if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then

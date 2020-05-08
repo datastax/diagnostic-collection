@@ -54,6 +54,7 @@ get a list of all options):
 * `-u` - specifies timeout for SSH in seconds (default: 600). You may need to increase it
   if you're using `extended` collection mode
 * `-v` - enables more verbose output by all scripts
+* `-z` - don't execute commands that require `sudo`
 
 Please note that user name should be passed as `-o User=...` in `-s` option, as `scp` and
 `ssh` are using different ways to pass user name.
@@ -135,6 +136,7 @@ enabled for Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of o
   process, etc.
 * `-t` - specifies the type of installation: `dse`, `ddac`, `coss`  (default: `dse`)
 * `-v` - enables more verbose output by all scripts
+* `-z` - don't execute commands that require `sudo`
 
 After successful execution, script generates file with name
 `/var/tmp/dse-diag-<IP_Address>.tar.gz`, like, `/var/tmp/dse-diag-10.200.179.237.tar.gz`,

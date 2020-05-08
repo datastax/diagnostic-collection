@@ -24,6 +24,7 @@ function usage() {
     echo "   -o output_dir - where to put generated files. Default: /var/tmp"
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
+    echo "   -z - don't execute commands that require sudo"
     echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
@@ -60,12 +61,13 @@ JCMD="$JAVA_HOME/bin/jcmd"
 DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
 DEFAULT_MCAC_DIR="/var/lib/cassandra/mcac_data/insights"
 MODE="normal"
+NOSUDO=""
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
+while getopts ":hzivn:c:p:f:d:o:t:I:m:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -83,6 +85,8 @@ while getopts ":hivn:c:p:f:d:o:t:I:m:" opt; do
            ;;
         I) INSIGHTS_DIR="$OPTARG"
             ;;
+        z) NOSUDO="true"
+           ;;
         m) MODE="$OPTARG"
            if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
                echo "Incorrect collection mode: $MODE"
@@ -130,12 +134,12 @@ function debug {
 }
 
 function get_node_ip {
-    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
     if [ -z "$CONN_ADDR" ]; then
-        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
     fi
     if [ -z "$CONN_ADDR" ]; then
-        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
                 CONN_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
@@ -145,9 +149,9 @@ function get_node_ip {
         fi
     fi
     # extract listen address
-    NODE_ADDR="$(grep -e '^broadcast_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+    NODE_ADDR="$(grep -e '^broadcast_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
     if [ -z "$NODE_ADDR" ]; then
-        IFACE="$(grep -E '^listen_interface: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+        IFACE="$(grep -E '^listen_interface: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
                 NODE_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
@@ -156,7 +160,7 @@ function get_node_ip {
             fi
         fi
         if [ -z "$NODE_ADDR" ]; then
-            NODE_ADDR="$(grep -e '^listen_address: ' $CONF_DIR/cassandra.yaml |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+            NODE_ADDR="$(grep -e '^listen_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
             if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
                 #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
                 if [ "$HOST_OS" = "Linux" ]; then
@@ -318,7 +322,7 @@ function collect_cloud_info() {
             CLOUD="AWS"
         fi
     fi
-    if [ "$CLOUD" = "none" ] && [ -n "$(command -v dmidecode)" ]; then
+    if [ "$CLOUD" = "none" ] && [ -n "$(command -v dmidecode)" ] && [ -z "$NOSUDO" ]; then
         BIOS_INFO="$(sudo dmidecode -s bios-version)"
         if [[ "$BIOS_INFO" =~ .*amazon.* ]]; then
             CLOUD="AWS"
@@ -395,11 +399,13 @@ function collect_system_info() {
         cat /sys/kernel/mm/transparent_hugepage/enabled > "$DATA_DIR/os-metrics/hugepage_enabled" 2>&1
         cat /sys/kernel/mm/transparent_hugepage/defrag > "$DATA_DIR/os-metrics/hugepage_defrag" 2>&1
         if [ -n "$(command -v blockdev)" ]; then
-            sudo blockdev --report 2>&1 |tee > "$DATA_DIR/os-metrics/blockdev_report"
+            if [ -z "$NOSUDO" ]; then
+                sudo blockdev --report 2>&1 |tee > "$DATA_DIR/os-metrics/blockdev_report"
+            fi
         else
             echo "Please install 'blockdev' to collect data about devices"
         fi
-        if [ -n "$(command -v dmidecode)" ]; then
+        if [ -n "$(command -v dmidecode)" ] && [ -z "$NOSUDO" ]; then
             sudo dmidecode |tee > "$DATA_DIR/os-metrics/dmidecode"
         fi
         free > "$DATA_DIR/os-metrics/free" 2>&1
@@ -471,16 +477,16 @@ function collect_system_info() {
         fi
         uptime > "$DATA_DIR/os-metrics/uptime" 2>&1
 
-        if [ -n "$(command -v pvdisplay)" ]; then
+        if [ -n "$(command -v pvdisplay)" ] && [ -z "$NOSUDO" ]; then
             sudo pvdisplay 2>&1|tee > "$DATA_DIR/os-metrics/pvdisplay"
         fi
-        if [ -n "$(command -v vgdisplay)" ]; then
+        if [ -n "$(command -v vgdisplay)" ] && [ -z "$NOSUDO" ]; then
             sudo vgdisplay 2>&1|tee > "$DATA_DIR/os-metrics/vgdisplay"
         fi
-        if [ -n "$(command -v lvdisplay)" ]; then
+        if [ -n "$(command -v lvdisplay)" ] && [ -z "$NOSUDO" ]; then
             sudo lvdisplay -a 2>&1|tee > "$DATA_DIR/os-metrics/lvdisplay"
         fi
-        if [ -n "$(command -v lvs)" ]; then
+        if [ -n "$(command -v lvs)" ] && [ -z "$NOSUDO" ]; then
             sudo lvs -a 2>&1|tee > "$DATA_DIR/os-metrics/lvs"
         fi
 
@@ -490,7 +496,7 @@ function collect_system_info() {
                 continue
             fi
             mkdir -p "$DATA_DIR/os-metrics/disks/"
-            if [ -n "$(command -v smartctl)" ] && [ -b "/dev/$DSK" ]; then
+            if [ -n "$(command -v smartctl)" ] && [ -b "/dev/$DSK" ] && [ -z "$NOSUDO" ]; then
                 sudo smartctl -H -i "$DM" 2>&1|tee "$DATA_DIR/os-metrics/disks/smartctl-$DSK"
             fi
             for file in $i/queue/*; do
@@ -516,7 +522,9 @@ function collect_system_info() {
             fi
         fi
         if [ -n "$(command -v netstat)" ]; then
-            sudo netstat -laputen 2>&1|tee > "$DATA_DIR/os-metrics/netstat"
+            if [ -z "$NOSUDO" ]; then
+                sudo netstat -laputen 2>&1|tee > "$DATA_DIR/os-metrics/netstat"
+            fi
         else
             echo "Please install 'netstat' to collect data about network connections"
         fi
@@ -617,6 +625,7 @@ function collect_system_info() {
     debug "Collecting jvm system info..."
     java -version > "$DATA_DIR/java_version.txt" 2>&1
     if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ "$MODE" != "light" ]; then
+        # TODO: think how to do it without sudo?
         if [ -n "$IS_PACKAGE" ]; then
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > "$DATA_DIR/java_system_properties.txt"
             sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > "$DATA_DIR/java_command_line.txt"
@@ -652,7 +661,7 @@ function collect_system_info() {
         fi
         # Since the data dir might have multiple items we need to check
         # each one using df to verify the physical device
-        #for DEVICE in $(cat $CONF_DIR/cassandra.yaml | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
+        #for DEVICE in $(cat "$CONF_DIR/cassandra.yaml" | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
         for DEVICE in $(echo "$DATA_CONF" | awk '{gsub(/,/,"\n");print}')
         do
             DM="$(df -h "$DEVICE" | grep -v "Filesystem" | awk '{print $1}')"

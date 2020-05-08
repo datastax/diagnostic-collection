@@ -42,6 +42,7 @@ RES_FILE=""
 INSIGHTS_MODE=""
 INSIGHTS_DIR=""
 IS_COSS=""
+IS_DSE=""
 IS_TARBALL=""
 IS_PACKAGE=""
 OUTPUT_DIR="/var/tmp"
@@ -57,6 +58,7 @@ OLDWD="$(pwd)"
 HOST_OS="$(uname -s)"
 JCMD="$JAVA_HOME/bin/jcmd"
 DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
+DEFAULT_MCAC_DIR="/var/lib/cassandra/mcac_data/insights"
 MODE="normal"
 
 # ---------------
@@ -795,30 +797,55 @@ function collect_data {
 
 function collect_insights {
     echo "Collecting insights data"
-    INSIGHTS_DIR=${INSIGHTS_DIR:-${DEFAULT_INSIGHTS_DIR}}
-    if [ "$TYPE" = "dse" ] && [ "$INSIGHTS_DIR" = "$DEFAULT_INSIGHTS_DIR" ]; then
-        # TODO: was taken from Mani's code as-is, maybe need to improve, like, read the top-level sections, etc.... 
-        while read line; do
-            name=$line
-            case $name in
-                *"$INSIGHTS_OPTIONS"*|*"$INSIGHTS_DATA_DIR"*)
-                    if [[ $name != \#* ]];
-                    then
-                        awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
-                        if [[ $name == data_dir* ]]; then
-                            INS_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"
-                            if [ -n "$INS_DIR" ] && [ -d "$INS_DIR" ] && [ -d "$INS_DIR/insights" ]; then
-	                        INSIGHTS_DIR="$INS_DIR/insights "
+    if [ -z "$INSIGHTS_DIR" ]; then
+        if [ -n "$IS_DSE" ]; then
+            INSIGHTS_DIR="$DEFAULT_INSIGHTS_DIR"
+            # TODO: naive attempt to parse options - need to do better
+            while read line; do
+                name=$line
+                case $name in
+                    *"$INSIGHTS_OPTIONS"*|*"$INSIGHTS_DATA_DIR"*)
+                        if [[ $name != \#* ]];
+                        then
+                            awk '{i=1;next};i && i++ <= 3' $DSE_CONF_DIR/dse.yaml
+                            if [[ $name == data_dir* ]]; then
+                                INS_DIR="$(echo $name |grep -i 'data_dir:' |sed -e 's|data_dir:[ ]*\([^ ]*\)$|\1|')"
+                                if [ -n "$INS_DIR" ] && [ -d "$INS_DIR" ] && [ -d "$INS_DIR/insights" ]; then
+	                            INSIGHTS_DIR="$INS_DIR/insights "
+                                fi
+                                break	    
                             fi
-                            break	    
                         fi
+                esac
+            done < "$DSE_CONF_DIR/dse.yaml"
+        elif [ -n "$IS_COSS" ]; then
+            INSIGHTS_DIR="$DEFAULT_MCAC_DIR"
+            MCAC_HOME=""
+            if [ -f "$DATA_DIR/java_cmdline" ]; then
+                MCAC_HOME=$(grep -E -- '-javaagent:[^ ]*/lib/datastax-mcac-agent[^ /]*.jar' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-javaagent:\([^ ]*\)/lib/datastax-mcac-agent[^ /]*.jar.*$|\1|')
+            fi
+            if [ -z "$MCAC_HOME" ] && [ -f "$CONF_DIR/jvm.options" ]; then
+                MCAC_HOME=$(grep -v -h -E '^#' "$CONF_DIR/jvm.options" | grep -E -- '-javaagent:[^ ]*/datastax-mcac-agent[^ /]*.jar'|sed -e 's|^.*-javaagent:\([^ ]*\)/lib/datastax-mcac-agent[^ /]*.jar.*$|\1|')
+            fi
+            if [ -z "$MCAC_HOME" ] && [ -f "$CONF_DIR/cassandra-env.sh" ]; then
+                MCAC_HOME=$(grep -v -h -E '^[ ]*#' "$CONF_DIR/cassandra-env.sh" | grep -E -- '-javaagent:[^ ]*/datastax-mcac-agent[^ /]*.jar'|sed -e 's|^.*-javaagent:\([^ ]*\)/lib/datastax-mcac-agent[^ /]*.jar.*$|\1|')
+            fi
+            if [ -n "$MCAC_HOME" ] && [ -d "$MCAC_HOME" ]; then
+                if [ -f "$MCAC_HOME/config/metric-collector.yaml" ]; then
+                    CASS_DATA_DIR=$(grep -e '^data_dir:' $MCAC_HOME/config/metric-collector.yaml|sed -e 's|^data_dir:[ ]*\(.*\)$|\1|')
+                    if [ -n "$CASS_DATA_DIR" ]; then
+                        INSIGHTS_DIR="$CASS_DATA_DIR/mcac_data/insights"
                     fi
-            esac
-        done < "$DSE_CONF_DIR/dse.yaml"
+                fi
+            else
+                echo "No installation of Metric Collector for Apache Cassandra was detected"
+            fi
+        fi
     fi
     
     if [ ! -d "$INSIGHTS_DIR" ]; then
-        echo "Can't find Insights directory, or it doesn't exist! $INSIGHTS_DIR"
+        echo "Can't find find directory with insights data, or it doesn't exist! $INSIGHTS_DIR"
+        echo "Please pass directory name via -I option (see help)"
         exit 1
     fi
     if [ -z "$RES_FILE" ]; then

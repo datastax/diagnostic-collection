@@ -301,9 +301,9 @@ function get_pid {
     fi
     if [ -n "$PID" ]; then
         if [ -n "$IS_DSE" ]; then
-            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > $DATA_DIR/java_cmdline
+            ps -aef|grep "$PID"|grep com.datastax.bdp.DseModule > "$DATA_DIR/java_cmdline"
         else
-            ps -aef|grep "$PID"|grep CassandraDaemon > $DATA_DIR/java_cmdline
+            ps -aef|grep "$PID"|grep CassandraDaemon > "$DATA_DIR/java_cmdline"
         fi
     fi
 }
@@ -343,9 +343,9 @@ function collect_cloud_info() {
     fi
 
     debug "detected cloud provider: $CLOUD"
-    echo "cloud provider: $CLOUD" > $DATA_DIR/os-metrics/cloud_info
+    echo "cloud provider: $CLOUD" > "$DATA_DIR/os-metrics/cloud_info"
     if [ "$CLOUD" = "AWS" ]; then
-        curl -s http://169.254.169.254/latest/dynamic/instance-identity/document > $DATA_DIR/os-metrics/cloud_aws
+        curl -s http://169.254.169.254/latest/dynamic/instance-identity/document > "$DATA_DIR/os-metrics/cloud_aws"
         {
             echo "instance type: $(curl -s http://169.254.169.254/latest/meta-data/instance-type)"
             echo "availability zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)"
@@ -353,7 +353,7 @@ function collect_cloud_info() {
             echo "public IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
             echo "private hostname: $(curl -s http://169.254.169.254/latest/meta-data/hostname)"
             echo "private IP: $(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)"
-        } >> $DATA_DIR/os-metrics/cloud_info
+        } >> "$DATA_DIR/os-metrics/cloud_info"
     fi
     if [ "$CLOUD" = "GCE" ]; then
         {
@@ -363,7 +363,7 @@ function collect_cloud_info() {
             echo "public IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)"
             echo "private hostname: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/hostname)"
             echo "private IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
-        } >> $DATA_DIR/os-metrics/cloud_info
+        } >> "$DATA_DIR/os-metrics/cloud_info"
     fi
     if [ "$CLOUD" = "Azure" ]; then
         FNAME=$DATA_DIR/os-metrics/cloud_azure
@@ -373,7 +373,7 @@ function collect_cloud_info() {
             echo "availability zone: $(sed -e 's|^.*"zone":"\([^"]*\)".*$|\1|' $FNAME)"
             echo "public IP: $(sed -e 's|^.*"publicIpAddress":"\([^"]*\)".*$|\1|' $FNAME)"
             echo "private IP: $(sed -e 's|^.*"privateIpAddress":"\([^"]*\)".*$|\1|' $FNAME)"
-        } >> $DATA_DIR/os-metrics/cloud_info
+        } >> "$DATA_DIR/os-metrics/cloud_info"
     fi
 }
 
@@ -382,57 +382,57 @@ function collect_system_info() {
     debug "Collecting OS level info..."
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -f /etc/lsb-release ]; then
-            cp /etc/lsb-release $DATA_DIR/os-metrics/
+            cp /etc/lsb-release "$DATA_DIR/os-metrics/"
         fi
         if [ -f /etc/os-release ]; then
-            cp /etc/os-release $DATA_DIR/
+            cp /etc/os-release "$DATA_DIR/"
         fi
         if [ -n "$PID" ]; then
-            cat "/proc/$PID/limits" > $DATA_DIR/process_limits 2>&1
+            cat "/proc/$PID/limits" > "$DATA_DIR/process_limits" 2>&1
         fi
-        cat /sys/kernel/mm/transparent_hugepage/enabled > $DATA_DIR/os-metrics/hugepage_enabled 2>&1
-        cat /sys/kernel/mm/transparent_hugepage/defrag > $DATA_DIR/os-metrics/hugepage_defrag 2>&1
+        cat /sys/kernel/mm/transparent_hugepage/enabled > "$DATA_DIR/os-metrics/hugepage_enabled" 2>&1
+        cat /sys/kernel/mm/transparent_hugepage/defrag > "$DATA_DIR/os-metrics/hugepage_defrag" 2>&1
         if [ -n "$(command -v blockdev)" ]; then
-            sudo blockdev --report 2>&1 |tee > $DATA_DIR/os-metrics/blockdev_report
+            sudo blockdev --report 2>&1 |tee > "$DATA_DIR/os-metrics/blockdev_report"
         else
             echo "Please install 'blockdev' to collect data about devices"
         fi
         if [ -n "$(command -v dmidecode)" ]; then
-            sudo dmidecode |tee > $DATA_DIR/os-metrics/dmidecode
+            sudo dmidecode |tee > "$DATA_DIR/os-metrics/dmidecode"
         fi
-        free > $DATA_DIR/os-metrics/free 2>&1
+        free > "$DATA_DIR/os-metrics/free" 2>&1
         if [ -n "$(command -v iostat)" ]; then
             if [ "$MODE" != "light" ]; then
-                iostat -ymxt 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/iostat 2>&1
+                iostat -ymxt 1 "$IOSTAT_LEN" > "$DATA_DIR/os-metrics/iostat" 2>&1
             fi
         else
             echo "Please install 'iostat' to collect data about I/O activity"
         fi
         if [ -n "$(command -v vmstat)" ]; then
-            vmstat  -w -t -s > $DATA_DIR/os-metrics/wmstat-stat 2>&1
+            vmstat  -w -t -s > "$DATA_DIR/os-metrics/wmstat-stat" 2>&1
             if [ "$MODE" != "light" ]; then
-                vmstat  -w -t -a 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-mem 2>&1
-                vmstat  -w -t -d 1 "$IOSTAT_LEN" > $DATA_DIR/os-metrics/wmstat-disk 2>&1
+                vmstat  -w -t -a 1 "$IOSTAT_LEN" > "$DATA_DIR/os-metrics/wmstat-mem" 2>&1
+                vmstat  -w -t -d 1 "$IOSTAT_LEN" > "$DATA_DIR/os-metrics/wmstat-disk" 2>&1
             fi
         else
             echo "Please install 'vmstat' to collect data about Linux"
         fi
         if [ -n "$(command -v lscpu)" ]; then
-            lscpu > $DATA_DIR/os-metrics/lscpu 2>&1
+            lscpu > "$DATA_DIR/os-metrics/lscpu" 2>&1
         fi
-        cat /proc/cpuinfo > $DATA_DIR/os-metrics/cpuinfo 2>&1
-        cat /proc/meminfo > $DATA_DIR/os-metrics/meminfo 2>&1
-        cat /proc/interrupts > $DATA_DIR/os-metrics/interrupts 2>&1
-        cat /proc/version > $DATA_DIR/os-metrics/version_proc 2>&1
+        cat /proc/cpuinfo > "$DATA_DIR/os-metrics/cpuinfo" 2>&1
+        cat /proc/meminfo > "$DATA_DIR/os-metrics/meminfo" 2>&1
+        cat /proc/interrupts > "$DATA_DIR/os-metrics/interrupts" 2>&1
+        cat /proc/version > "$DATA_DIR/os-metrics/version_proc" 2>&1
         if [ -n "$(command -v numactl)" ]; then
-            numactl -show > $DATA_DIR/os-metrics/numactl 2>&1
-            numactl --hardware > $DATA_DIR/os-metrics/numactl_hardware 2>&1
+            numactl -show > "$DATA_DIR/os-metrics/numactl" 2>&1
+            numactl --hardware > "$DATA_DIR/os-metrics/numactl_hardware" 2>&1
         else
             echo "Please install 'numactl' to collect data about NUMA subsystem"
         fi
         # collect information about CPU frequency, etc.
         if [ -d /sys/devices/system/cpu/cpu0/cpufreq/ ]; then
-            mkdir -p $DATA_DIR/os-metrics/cpus/
+            mkdir -p "$DATA_DIR/os-metrics/cpus/"
             for i in /sys/devices/system/cpu/cpu[0-9]*; do
                 CPUN="$(basename "$i")"
                 for file in $i/cpufreq/*; do
@@ -441,13 +441,13 @@ function collect_system_info() {
             done
         fi
         if [ -f /proc/sys/vm/zone_reclaim_mode ]; then
-            cat /proc/sys/vm/zone_reclaim_mode > $DATA_DIR/os-metrics/zone_reclaim_mode
+            cat /proc/sys/vm/zone_reclaim_mode > "$DATA_DIR/os-metrics/zone_reclaim_mode"
         fi
         if [ -f /etc/fstab ]; then
-            cp /etc/fstab $DATA_DIR/os-metrics/fstab
+            cp /etc/fstab "$DATA_DIR/os-metrics/fstab"
         fi
         if [ -f /etc/security/limits.conf ]; then
-            cp /etc/security/limits.conf $DATA_DIR/os-metrics/limits.conf
+            cp /etc/security/limits.conf "$DATA_DIR/os-metrics/limits.conf"
         fi
         if [ -d /etc/security/limits.d/ ]; then
             mkdir -p "$DATA_DIR/os-metrics/limits.d/"
@@ -455,31 +455,31 @@ function collect_system_info() {
         fi
 
         if [ -n "$(command -v lsblk)" ]; then
-            lsblk > $DATA_DIR/os-metrics/lsblk 2>&1
-            lsblk -oname,kname,fstype,mountpoint,label,ra,model,size,rota > $DATA_DIR/os-metrics/lsblk_custom 2>&1
+            lsblk > "$DATA_DIR/os-metrics/lsblk" 2>&1
+            lsblk -oname,kname,fstype,mountpoint,label,ra,model,size,rota > "$DATA_DIR/os-metrics/lsblk_custom" 2>&1
         fi
         if [ -n "$(command -v sar)" ]; then
-            sar -B > $DATA_DIR/os-metrics/sar 2>&1
+            sar -B > "$DATA_DIR/os-metrics/sar" 2>&1
         fi
         if [ -n "$(command -v lspci)" ]; then
-            lspci> $DATA_DIR/os-metrics/lspci 2>&1
+            lspci> "$DATA_DIR/os-metrics/lspci" 2>&1
         fi
         if [ -n "$(command -v ss)" ]; then
-            ss -at > $DATA_DIR/os-metrics/ss 2>&1
+            ss -at > "$DATA_DIR/os-metrics/ss" 2>&1
         fi
-        uptime > $DATA_DIR/os-metrics/uptime 2>&1
+        uptime > "$DATA_DIR/os-metrics/uptime" 2>&1
 
         if [ -n "$(command -v pvdisplay)" ]; then
-            sudo pvdisplay 2>&1|tee > $DATA_DIR/os-metrics/pvdisplay
+            sudo pvdisplay 2>&1|tee > "$DATA_DIR/os-metrics/pvdisplay"
         fi
         if [ -n "$(command -v vgdisplay)" ]; then
-            sudo vgdisplay 2>&1|tee > $DATA_DIR/os-metrics/vgdisplay
+            sudo vgdisplay 2>&1|tee > "$DATA_DIR/os-metrics/vgdisplay"
         fi
         if [ -n "$(command -v lvdisplay)" ]; then
-            sudo lvdisplay -a 2>&1|tee > $DATA_DIR/os-metrics/lvdisplay
+            sudo lvdisplay -a 2>&1|tee > "$DATA_DIR/os-metrics/lvdisplay"
         fi
         if [ -n "$(command -v lvs)" ]; then
-            sudo lvs -a 2>&1|tee > $DATA_DIR/os-metrics/lvs
+            sudo lvs -a 2>&1|tee > "$DATA_DIR/os-metrics/lvs"
         fi
 
         for i in /sys/block/*; do
@@ -492,14 +492,14 @@ function collect_system_info() {
             done
         done
         if [ -d /sys/devices/system/clocksource/clocksource0/ ]; then
-            echo "available: $(cat /sys/devices/system/clocksource/clocksource0/available_clocksource)" > $DATA_DIR/os-metrics/clocksource
-            echo "current: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)" >> $DATA_DIR/os-metrics/clocksource
+            echo "available: $(cat /sys/devices/system/clocksource/clocksource0/available_clocksource)" > "$DATA_DIR/os-metrics/clocksource"
+            echo "current: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource)" >> "$DATA_DIR/os-metrics/clocksource"
         fi
         if [ -n "$(command -v dmesg)" ]; then
-            dmesg -T > $DATA_DIR/os-metrics/dmesg
+            dmesg -T > "$DATA_DIR/os-metrics/dmesg"
         fi
         if [ -n "$(command -v ifconfig)" ]; then
-            ifconfig > $DATA_DIR/os-metrics/ifconfig
+            ifconfig > "$DATA_DIR/os-metrics/ifconfig"
             if [ -n "$(command -v ethtool)" ]; then
                 mkdir -p "$DATA_DIR/os-metrics/ethtool/"
                 for i in $(ifconfig |grep -e '^[a-z]'|cut -f 1 -d ' '); do
@@ -508,17 +508,17 @@ function collect_system_info() {
             fi
         fi
         if [ -n "$(command -v netstat)" ]; then
-            sudo netstat -laputen 2>&1|tee > $DATA_DIR/os-metrics/netstat
+            sudo netstat -laputen 2>&1|tee > "$DATA_DIR/os-metrics/netstat"
         else
             echo "Please install 'netstat' to collect data about network connections"
         fi
         if [ -n "$(command -v netstat)" ]; then
-            netstat --statistics > $DATA_DIR/os-metrics/netstat-stats 2>&1
+            netstat --statistics > "$DATA_DIR/os-metrics/netstat-stats" 2>&1
         fi
 
     fi
-    df -k > $DATA_DIR/os-metrics/df 2>&1
-    sysctl -a > $DATA_DIR/os-metrics/sysctl 2>&1
+    df -k > "$DATA_DIR/os-metrics/df" 2>&1
+    sysctl -a > "$DATA_DIR/os-metrics/sysctl" 2>&1
 
     # Collect uname info (for Linux)
     debug "Collecting uname info..."
@@ -532,7 +532,7 @@ function collect_system_info() {
             echo "processor_type: $(uname -p)"
             echo "platform_type: $(uname -i)"
             echo "os_type: $(uname -o)"
-        } > $DATA_DIR/os-info.txt 2>&1
+        } > "$DATA_DIR/os-info.txt" 2>&1
     # Collect uname info (for MacOS)
     elif [ "$HOST_OS" = "Darwin" ]; then
         {
@@ -542,21 +542,21 @@ function collect_system_info() {
             echo "os_release: $(uname -r)"
             echo "os_version: $(uname -v)"
             echo "os_name: $(uname -s)"
-        } > $DATA_DIR/os-info.txt 2>&1
+        } > "$DATA_DIR/os-info.txt" 2>&1
     else
-        echo "os type $HOST_OS not catered for or detected" > $DATA_DIR/os-info.txt 2>&1
+        echo "os type $HOST_OS not catered for or detected" > "$DATA_DIR/os-info.txt" 2>&1
     fi
     # Collect NTP info (for Linux)
     debug "Collecting ntp info..."
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -n "$(command -v ntptime)" ]; then
-            ntptime > $DATA_DIR/ntp/ntptime 2>&1
+            ntptime > "$DATA_DIR/ntp/ntptime" 2>&1
         fi
         if [ -n "$(command -v ntpstat)" ]; then
-            ntpstat > $DATA_DIR/ntp/ntpstat 2>&1
+            ntpstat > "$DATA_DIR/ntp/ntpstat" 2>&1
         fi
         if [ -n "$(command -v ntpq)" ]; then
-            ntpq -p > $DATA_DIR/os-metrics/ntpq_p 2>&1
+            ntpq -p > "$DATA_DIR/os-metrics/ntpq_p" 2>&1
         fi
     fi
     # Collect Chrony info (for Linux)
@@ -564,9 +564,9 @@ function collect_system_info() {
     if [ "$HOST_OS" = "Linux" ]; then
         if [ -n "$(command -v chronyc)" ]; then
             mkdir -p "$DATA_DIR"/os-metrics/chrony
-            chronyc tracking > $DATA_DIR/os-metrics/chrony/tracking 2>&1
-            chronyc sources -v > $DATA_DIR/os-metrics/chrony/sources 2>&1
-            chronyc sourcestats -v $DATA_DIR/os-metrics/chrony/sourcestats 2>&1
+            chronyc tracking > "$DATA_DIR/os-metrics/chrony/tracking" 2>&1
+            chronyc sources -v > "$DATA_DIR/os-metrics/chrony/sources" 2>&1
+            chronyc sourcestats -v "$DATA_DIR/os-metrics/chrony/sourcestats" 2>&1
         fi
     fi
     # Collect TOP info (for Linux)
@@ -585,7 +585,7 @@ function collect_system_info() {
             }
             END {
             print "user: "user "\nnice: "nice "\nsystem: "systm "\niowait: "iowait "\nsteal: "steal "\nidle: "idle
-        }' > $DATA_DIR/os-metrics/cpu.txt 2>&1
+        }' > "$DATA_DIR/os-metrics/cpu.txt" 2>&1
     fi
     # Collect FREE info (for Linux)
     debug "Collecting free info..."
@@ -603,18 +603,18 @@ function collect_system_info() {
             if (type=="Mem:"){
                 print "mem total: "total"\nmem used: "used"\nmem free: "free"\nmem shared: "shared"\nmem buff/cache: "buffcache"\nmem available: "avail
                 } else {
-                print "swap total: "total"\nswap used: "used"\nswap free: "free}}' > $DATA_DIR/os-metrics/memory.txt 2>&1
+                print "swap total: "total"\nswap used: "used"\nswap free: "free}}' > "$DATA_DIR/os-metrics/memory.txt" 2>&1
     fi
     # Collect JVM system info (for Linux)
     debug "Collecting jvm system info..."
-    java -version > $DATA_DIR/java_version.txt 2>&1
+    java -version > "$DATA_DIR/java_version.txt" 2>&1
     if [ -n "$PID" ] && [ "$HOST_OS" = "Linux" ] && [ -n "$JAVA_HOME" ] && [ "$MODE" != "light" ]; then
         if [ -n "$IS_PACKAGE" ]; then
-            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > $DATA_DIR/java_system_properties.txt
-            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > $DATA_DIR/java_command_line.txt
+            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.system_properties 2>&1| tee > "$DATA_DIR/java_system_properties.txt"
+            sudo -u "$CASS_USER" "$JCMD" "$PID" VM.command_line 2>&1 |tee > "$DATA_DIR/java_command_line.txt"
         else
-            "$JCMD" "$PID" VM.system_properties > $DATA_DIR/java_system_properties.txt 2>&1
-            "$JCMD" "$PID" VM.command_line > $DATA_DIR/java_command_line.txt 2>&1
+            "$JCMD" "$PID" VM.system_properties > "$DATA_DIR/java_system_properties.txt" 2>&1
+            "$JCMD" "$PID" VM.command_line > "$DATA_DIR/java_command_line.txt" 2>&1
         fi
     fi
     # Collect Data DIR info
@@ -631,16 +631,16 @@ function collect_system_info() {
         # read the JVM variable cassandra.storagedir and append paths as
         # necessary.
         if [ -n "$DATA_CONF" ]; then
-            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
-        elif [ -f $DATA_DIR/java_command_line.txt ]; then
-            DATA_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
-            echo "data: $DATA_CONF" > $DATA_DIR/os-metrics/disk_config.txt 2>&1
+            echo "data: $DATA_CONF" > "$DATA_DIR/os-metrics/disk_config.txt" 2>&1
+        elif [ -f "$DATA_DIR/java_command_line.txt" ]; then
+            DATA_CONF=$(tr " " "\n" < "$DATA_DIR/java_command_line.txt" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
+            echo "data: $DATA_CONF" > "$DATA_DIR/os-metrics/disk_config.txt" 2>&1
         fi
         if [ -n "$COMMITLOG_CONF" ]; then
-            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
-        elif [ -f $DATA_DIR/java_command_line.txt ]; then
-            COMMITLOG_CONF=$(tr " " "\n" < $DATA_DIR/java_command_line.txt | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
-            echo "commitlog: $COMMITLOG_CONF" >> $DATA_DIR/os-metrics/disk_config.txt 2>&1
+            echo "commitlog: $COMMITLOG_CONF" >> "$DATA_DIR/os-metrics/disk_config.txt" 2>&1
+        elif [ -f "$DATA_DIR/java_command_line.txt" ]; then
+            COMMITLOG_CONF=$(tr " " "\n" < "$DATA_DIR/java_command_line.txt" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
+            echo "commitlog: $COMMITLOG_CONF" >> "$DATA_DIR/os-metrics/disk_config.txt" 2>&1
         fi
         # Since the data dir might have multiple items we need to check
         # each one using df to verify the physical device
@@ -655,8 +655,8 @@ function collect_system_info() {
             fi
         done
         COMMITLOG_MOUNT=$(df -h "$COMMITLOG_CONF" | grep -v "Filesystem" | awk '{print $1}')
-        echo "data: $DATA_MOUNT" > $DATA_DIR/os-metrics/disk_device.txt 2>&1
-        echo "commitlog: $COMMITLOG_MOUNT" >> $DATA_DIR/os-metrics/disk_device.txt 2>&1
+        echo "data: $DATA_MOUNT" > "$DATA_DIR/os-metrics/disk_device.txt" 2>&1
+        echo "commitlog: $COMMITLOG_MOUNT" >> "$DATA_DIR/os-metrics/disk_device.txt" 2>&1
     fi
 }
 
@@ -666,27 +666,27 @@ function collect_data {
 
     for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml jvm-clients.options jvm-server.options jvm11-clients.options jvm11-server.options jvm8-clients.options jvm8-server.options; do
         if [ -f "$CONF_DIR/$i" ] ; then
-            cp $CONF_DIR/$i $DATA_DIR/conf/cassandra/
+            cp $CONF_DIR/$i "$DATA_DIR/conf/cassandra/"
         fi
     done
 
     # collecting nodetool information
     debug "Collecting nodetool output..."
     for i in cfstats compactionhistory compactionstats describecluster getcompactionthroughput getstreamthroughput gossipinfo info netstats proxyhistograms ring status statusbinary tpstats version cfhistograms; do
-        $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS $i > $DATA_DIR/nodetool/$i 2>&1
+        $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS $i > "$DATA_DIR/nodetool/$i" 2>&1
     done
 
     if [ "$MODE" = "extended" ]; then
         for i in tablestats tpstats ; do
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS -F json $i > $DATA_DIR/nodetool/$i.json 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS -F json $i > "$DATA_DIR/nodetool/$i.json" 2>&1
         done
     fi
 
     # collecting schema
     debug "Collecting schema info..."
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > $DATA_DIR/driver/metadata 2>&1
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > $DATA_DIR/driver/schema 2>&1
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > $DATA_DIR/driver/full-schema 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > "$DATA_DIR/driver/metadata" 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > "$DATA_DIR/driver/schema" 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > "$DATA_DIR/driver/full-schema" 2>&1
 
     # collecting process-related info
     collect_system_info
@@ -706,29 +706,29 @@ function collect_data {
     if [ -z "$CASS_DSE_LOG_DIR" ]; then
         CASS_DSE_LOG_DIR="$LOG_DIR"
     fi
-    find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log -a -type f -exec cp {} $DATA_DIR/logs/cassandra/ \;
+    find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log -a -type f -exec cp {} "$DATA_DIR/logs/cassandra/" \;
 
     if [ "$MODE" = "extended" ]; then
-        find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log\.\* -a -type f -exec cp {} $DATA_DIR/logs/cassandra/ \;
+        find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log\.\* -a -type f -exec cp {} "$DATA_DIR/logs/cassandra/" \;
     fi
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         GC_LOG="$(sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|' < "$DATA_DIR/java_cmdline")"
         if [ -n "$GC_LOG" ] && [ -f "$GC_LOG" ]; then
-            cp "$GC_LOG" $DATA_DIR/logs/cassandra/
+            cp "$GC_LOG" "$DATA_DIR/logs/cassandra/"
         fi
     fi
 
     # The rest of DSE-specific things
     if [ -n "$IS_DSE" ]; then
         if [ -f "$DSE_CONF_DIR/dse.yaml" ]; then
-            cp "$DSE_CONF_DIR/dse.yaml" $DATA_DIR/conf/dse/
+            cp "$DSE_CONF_DIR/dse.yaml" "$DATA_DIR/conf/dse/"
         fi
         if [ -f /etc/default/dse ]; then
-            cp /etc/default/dse $DATA_DIR/conf/dse/
+            cp /etc/default/dse "$DATA_DIR/conf/dse/"
         fi
         # TODO: decide, if we need to collect Tomcat logs
         # if [ -f "$DATA_DIR/java_cmdline" ]; then
-        #     # TOMCAT_DIR="`cat $DATA_DIR/java_cmdline|sed -e 's|^.*-Dtomcat.logs=\([^ ]*\) .*$|\1|'`"
+        #     # TOMCAT_DIR="`cat "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dtomcat.logs=\([^ ]*\) .*$|\1|'`"
         #     # if [ -n "$TOMCAT_DIR" -a -d "$TOMCAT_DIR" ]; then
         #     #
         #     # fi
@@ -745,26 +745,26 @@ function collect_data {
 
         debug "Collecting DSE information..."
         if [ "$MODE" != "light" ]; then
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS sjk mxdump > $DATA_DIR/jmx_dump.json 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS sjk mxdump > "$DATA_DIR/jmx_dump.json" 2>&1
         fi
 
         for i in status ring ; do
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS $i > $DATA_DIR/dsetool/$i 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS $i > "$DATA_DIR/dsetool/$i" 2>&1
         done
 
         if [ "$MODE" != "light" ]; then
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > $DATA_DIR/dsetool/insights_config 2>&1
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > $DATA_DIR/dsetool/insights_filters 2>&1
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > $DATA_DIR/dsetool/slowest_queries 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > "$DATA_DIR/dsetool/insights_config" 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > "$DATA_DIR/dsetool/insights_filters" 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > "$DATA_DIR/dsetool/slowest_queries" 2>&1
             # collect nodesync rate
             if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
-                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > $DATA_DIR/nodetool/nodesyncrate 2>&1
+                $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > "$DATA_DIR/nodetool/nodesyncrate" 2>&1
             fi
         fi
 
         # collect DSE Search data
         debug "Collecting DSE Search information..."
-        for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' $DATA_DIR/driver/schema 2>/dev/null|sed -e 's|^.* ON \([^ ]*\) (solr_query).*$|\1|'|tr -d '"'); do
+        for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' "$DATA_DIR/driver/schema" 2>/dev/null|sed -e 's|^.* ON \([^ ]*\) (solr_query).*$|\1|'|tr -d '"'); do
             debug "collecting data for DSE Search core $core"
             mkdir -p "$DATA_DIR/solr/$core/"
             # it's faster to execute cqlsh than dsetool, but it's internal info
@@ -782,7 +782,7 @@ function collect_data {
         done
     elif [ -n "$IS_COSS" ]; then
         if [ -f /etc/default/cassandra ]; then
-            cp /etc/default/cassandra $DATA_DIR/conf/cassandra/default
+            cp /etc/default/cassandra "$DATA_DIR/conf/cassandra/default"
         fi
     fi
 }
@@ -870,15 +870,15 @@ function adjust_nodetool_params {
     local jmx_host=127.0.0.1
     local tmp=""
     if [ -f "$DATA_DIR/java_cmdline" ]; then
-        tmp=$(grep 'cassandra.jmx.local.port=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
+        tmp=$(grep 'cassandra.jmx.local.port=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
         if [ -n "$tmp" ]; then
             jmx_port="$tmp"
         else
-            tmp=$(grep 'cassandra.jmx.remote.port=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
+            tmp=$(grep 'cassandra.jmx.remote.port=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
             if [ -n "$tmp" ]; then
                 jmx_port="$tmp"
             fi
-            tmp=$(grep 'java.rmi.server.hostname=' $DATA_DIR/java_cmdline|sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
+            tmp=$(grep 'java.rmi.server.hostname=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
             if [ -n "$tmp" ]; then
                 jmx_host="$tmp"
             fi

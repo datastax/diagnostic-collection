@@ -497,7 +497,7 @@ function collect_system_info() {
             fi
             mkdir -p "$DATA_DIR/os-metrics/disks/"
             if [ -n "$(command -v smartctl)" ] && [ -b "/dev/$DSK" ] && [ -z "$NOSUDO" ]; then
-                sudo smartctl -H -i "$DM" 2>&1|tee "$DATA_DIR/os-metrics/disks/smartctl-$DSK"
+                sudo smartctl -H -i "$DM" 2>&1|tee > "$DATA_DIR/os-metrics/disks/smartctl-$DSK"
             fi
             for file in $i/queue/*; do
                 if [ -f "$file" ]; then

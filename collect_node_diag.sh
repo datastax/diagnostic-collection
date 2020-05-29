@@ -797,6 +797,18 @@ function collect_data {
                 $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS list_index_files "$core" > "$DATA_DIR/solr/$core/index_files" 2>&1
             fi
         done
+        if [ -d "$DATA_DIR/solr/" ]; then
+            SOLR_DATA_DIR=$(grep -E '^solr_data_dir: ' "$DSE_CONF_DIR/dse.yaml" 2>&1|sed -e 's|s^solr_data_dir:[ ]*\(.*\)$|\1|')
+            # if it's not specified explicitly
+            if [ -z "$SOLR_DATA_DIR" ] && [ -n "$DATA_CONF" ]; then
+                debug "No Solr directory is specified in dse.yaml, detecting from DATA_CONF: $DATA_CONF"
+                SOLR_DATA_DIR="$(echo "$DATA_CONF"|sed -e 's|^\([^,]*\)\(,.*\)?$|\1|')/solr.data"
+                debug "SOLR_DATA_DIR is defined as: $SOLR_DATA_DIR"
+            fi
+            if [ -n "$SOLR_DATA_DIR" ] && [ -d "$SOLR_DATA_DIR" ]; then
+                cd "$SOLR_DATA_DIR" && du -s -- * 2>&1 > "$DATA_DIR/solr/cores-sizes.txt"
+            fi
+        fi
     elif [ -n "$IS_COSS" ]; then
         if [ -f /etc/default/cassandra ]; then
             cp /etc/default/cassandra "$DATA_DIR/conf/cassandra/default"

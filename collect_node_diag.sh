@@ -772,7 +772,7 @@ function collect_data {
         if [ "$MODE" != "light" ]; then
             $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_config --show_config > "$DATA_DIR/dsetool/insights_config" 2>&1
             $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS insights_filters --show_filters > "$DATA_DIR/dsetool/insights_filters" 2>&1
-            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS cqlslowlog recent_slowest_queries > "$DATA_DIR/dsetool/slowest_queries" 2>&1
+            $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/dsetool $DT_OPTS perf cqlslowlog recent_slowest_queries > "$DATA_DIR/dsetool/slowest_queries" 2>&1
             # collect nodesync rate
             if [ "$DSE_MAJOR_VERSION" -gt "5" ]; then
                 $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/nodetool $NT_OPTS nodesyncservice getrate > "$DATA_DIR/nodetool/nodesyncrate" 2>&1

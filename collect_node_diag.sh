@@ -393,6 +393,12 @@ function collect_system_info() {
         if [ -f /etc/os-release ]; then
             cp /etc/os-release "$DATA_DIR/"
         fi
+        if [ -f /etc/redhat-release ]; then
+            cp /etc/redhat-release "$DATA_DIR/"
+        fi
+        if [ -f /etc/debian_version ]; then
+            cp /etc/debian_version "$DATA_DIR/"
+        fi
         if [ -n "$PID" ]; then
             cat "/proc/$PID/limits" > "$DATA_DIR/process_limits" 2>&1
         fi

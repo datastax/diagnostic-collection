@@ -49,6 +49,7 @@ IS_PACKAGE=""
 OUTPUT_DIR="/var/tmp"
 NODE_ADDR=""
 CONN_ADDR=""
+CONN_PORT=9042
 ROOT_DIR=""
 DATA_DIR=""
 CONF_DIR=""
@@ -179,6 +180,11 @@ function get_node_ip {
         echo "Can't detect node's address..."
         exit 1
     fi
+    TSTR="$(grep -e '^native_transport_port: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+    if [ -n "$TSTR" ]; then
+        CONN_PORT="$TSTR"
+    fi
+    debug "NODE_ADDR=$NODE_ADDR CONN_ADDR=$CONN_ADDR CONN_PORT=$CONN_PORT"
 }
 
 function set_paths {
@@ -707,9 +713,9 @@ function collect_data {
 
     # collecting schema
     debug "Collecting schema info..."
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' $CONN_ADDR > "$DATA_DIR/driver/metadata" 2>&1
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' $CONN_ADDR > "$DATA_DIR/driver/schema" 2>&1
-    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' $CONN_ADDR > "$DATA_DIR/driver/full-schema" 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' "$CONN_ADDR" "$CONN_PORT" > "$DATA_DIR/driver/metadata" 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe schema;' "$CONN_ADDR" "$CONN_PORT" > "$DATA_DIR/driver/schema" 2>&1
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe full schema;' "$CONN_ADDR" "$CONN_PORT" > "$DATA_DIR/driver/full-schema" 2>&1
 
     # collecting process-related info
     collect_system_info
@@ -791,8 +797,8 @@ function collect_data {
             debug "collecting data for DSE Search core $core"
             mkdir -p "$DATA_DIR/solr/$core/"
             # it's faster to execute cqlsh than dsetool, but it's internal info
-            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/solrconfig.xml" 2>&1
-            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/solrconfig.xml" 2>&1
+            $BIN_DIR/cqlsh $CQLSH_OPTS -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$DATA_DIR/solr/$core/schema.xml" 2>&1
             if [ "$MODE" != "light" ]; then
                 #$BIN_DIR/dsetool $DT_OPTS get_core_config "$core" > "$DATA_DIR/solr/$core/config.xml" 2>&1
                 #$BIN_DIR/dsetool $DT_OPTS get_core_schema "$core" > "$DATA_DIR/solr/$core/schema.xml" 2>&1

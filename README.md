@@ -25,9 +25,10 @@ Usage:
 
 This script accepts the same arguments as [`collect_node_diag.sh`](#collecting-diagnostic-on-individual-nodes), 
 with only `-t` as required parameter - all other are optional, but could be used to pass
-SSH, nodetool, cqlsh, dsetool options.  For tarball installations it's required to pass
-the path to the top-level directory of the DSE/DDAC/Cassandra installation (pass `-h` to
-get a list of all options):
+SSH, nodetool, cqlsh, dsetool options (for example, you need to pass these options if you
+have authentication enabled for `cqlsh` and/or JMX).  For tarball installations it's
+required to pass the path to the top-level directory of the DSE/DDAC/Cassandra
+installation (pass `-h` to get a list of all options): 
 
 * `-c` - specifies options to pass to `cqlsh` (user name, password, etc.)
 * `-d` - specifies the options for `dsetool` command (JMX user, password, etc.)

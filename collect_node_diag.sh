@@ -810,7 +810,7 @@ function collect_data {
             fi
         done
         if [ -d "$DATA_DIR/solr/" ]; then
-            SOLR_DATA_DIR=$(grep -E '^solr_data_dir: ' "$DSE_CONF_DIR/dse.yaml" 2>&1|sed -e 's|s^solr_data_dir:[ ]*\(.*\)$|\1|')
+            SOLR_DATA_DIR=$(grep -E '^solr_data_dir: ' "$DSE_CONF_DIR/dse.yaml" 2>&1|sed -e 's|^solr_data_dir:[ ]*\(.*\)$|\1|')
             # if it's not specified explicitly
             if [ -z "$SOLR_DATA_DIR" ] && [ -n "$DATA_CONF" ]; then
                 debug "No Solr directory is specified in dse.yaml, detecting from DATA_CONF: $DATA_CONF"

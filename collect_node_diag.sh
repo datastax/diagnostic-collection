@@ -693,6 +693,16 @@ function collect_system_info() {
 function collect_data {
     echo "Collecting data from node $NODE_ADDR..."
 
+    $MAYBE_RUN_WITH_TIMEOUT $BIN_DIR/cqlsh $CQLSH_OPTS -e 'describe cluster;' "$CONN_ADDR" "$CONN_PORT" > /dev/null 2>&1
+    RES=$?
+    if [ "$RES" -ne 0 ]; then
+        echo "Can't execute cqlsh command, exit code: $RES. If you're have cluster with authentication,"
+        echo "please pass the option -c with user name/password and other options, like:"
+        echo "-c '-u username -p password'"
+        echo "If you have SSL enabled for client connections, pass --ssl in -c"
+        exit 1
+    fi
+
     for i in cassandra-rackdc.properties cassandra.yaml cassandra-env.sh jvm.options logback-tools.xml logback.xml jvm-clients.options jvm-server.options jvm11-clients.options jvm11-server.options jvm8-clients.options jvm8-server.options; do
         if [ -f "$CONF_DIR/$i" ] ; then
             cp $CONF_DIR/$i "$DATA_DIR/conf/cassandra/"

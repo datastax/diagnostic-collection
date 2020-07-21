@@ -124,7 +124,7 @@ fi
 
 MAYBE_RUN_WITH_TIMEOUT=""
 if [ -n "$(command -v timeout)" ]; then
-    MAYBE_RUN_WITH_TIMEOUT="timeout --foreground 30"
+    MAYBE_RUN_WITH_TIMEOUT="timeout --foreground 120"
 fi
 
 function debug {

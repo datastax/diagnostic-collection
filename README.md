@@ -33,7 +33,7 @@ installation (pass `-h` to get a list of all options):
 * `-c` - specifies options to pass to `cqlsh` (user name, password, etc.)
 * `-d` - specifies the options for `dsetool` command (JMX user, password, etc.)
 * `-f` - specifies file with list of hosts where to execute
- `collect_node_diag.sh` (default - try to get list from 'nodetool status')
+ `collect_node_diag.sh` (default - try to get list from `nodetool status`)
 * `-i` - specifies that we need to collect insights data ([DSE Metrics Collector](https://docs.datastax.com/en/monitoring/doc/monitoring/opsUseMetricsCollector.html) and [Metric Collector for Apache Cassandra](https://github.com/datastax/metric-collector-for-apache-cassandra))
 * `-I` - specifies directory that contains insights `.gz` files (default is `/var/lib/cassandra/insights_data/insights`)
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:

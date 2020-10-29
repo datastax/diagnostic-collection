@@ -33,7 +33,7 @@ INSIGHTS=""
 REMOVE_FILES=""
 TYPE="dse"
 
-while getopts ":hzvirf:p:o:t:m:" opt; do
+while getopts ":hzvirkf:p:o:t:m:" opt; do
     case $opt in
         f) RES_FILE=$OPTARG
            ;;
@@ -47,6 +47,8 @@ while getopts ":hzvirf:p:o:t:m:" opt; do
         r) REMOVE_FILES="true"
            ;;
         t) TYPE=$OPTARG
+           ;;
+        k)
            ;;
         v)
            ;;

@@ -19,6 +19,7 @@ function usage() {
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
     echo "   -p pid - PID of DSE or DDAC/Cassandra process"
     echo "   -f file_name - name of resulting file"
+    echo "   -k keystore_ssl_info - collect keystore and truststore information"
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
     echo "   -o output_dir - where to put generated files. Default: /var/tmp"
@@ -36,6 +37,7 @@ function usage() {
 
 VERBOSE=""
 NT_OPTS=""
+COLLECT_SSL=""
 CQLSH_OPTS=""
 DT_OPTS=""
 PID=""
@@ -68,7 +70,7 @@ NOSUDO=""
 # Parse arguments
 # ---------------
 
-while getopts ":hzivn:c:p:f:d:o:t:I:m:" opt; do
+while getopts ":hzivkn:c:p:f:d:o:t:I:m:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -85,7 +87,9 @@ while getopts ":hzivn:c:p:f:d:o:t:I:m:" opt; do
         i) INSIGHTS_MODE="true"
            ;;
         I) INSIGHTS_DIR="$OPTARG"
-            ;;
+           ;;
+        k) COLLECT_SSL="true"
+           ;;
         z) NOSUDO="true"
            ;;
         m) MODE="$OPTARG"
@@ -371,7 +375,7 @@ function collect_cloud_info() {
         {
             echo "instance type: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/machine-type|sed -e 's|^.*/\([^/]*\)$|\1|')"
             echo "availability zone: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/zone|sed -e 's|^.*/\([^/]*\)$|\1|')"
-#        echo "public hostname: "
+            # echo "public hostname: "
             echo "public IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)"
             echo "private hostname: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/hostname)"
             echo "private IP: $(curl -s -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
@@ -919,11 +923,70 @@ function collect_insights {
     fi
 }
 
+function collect_ssl_info {
+    # Java location is assumed as per L641 but jcmd uses $JAVA_HOME...
+    debug "Collecting SSL related information"
+    is_client_ssl_enabled=$(find_yaml_sub_property client_encryption_options enabled)
+    is_server_ssl_enabled=$(find_yaml_sub_property server_encryption_options internode_encryption)
+    if [ ! -z $is_client_ssl_enabled ] && [ $is_client_ssl_enabled = true ]; then
+        debug "collecting keystore and truststore for client_encryption_options"
+        client_keystore=$(find_yaml_sub_property client_encryption_options keystore)
+        client_keystore_pass=$(find_yaml_sub_property client_encryption_options keystore_password)
+        client_truststore=$(find_yaml_sub_property client_encryption_options truststore)
+        client_truststore_pass=$(find_yaml_sub_property client_encryption_options truststore_password)
+        if [ ! -z $client_keystore ] && [ ! -z $client_keystore_pass ]; then
+            keytool -list -v -keystore $client_keystore -storepass $client_keystore_pass > "$DATA_DIR/conf/security/client-keystore.txt" 2>&1
+        fi
+        if [ ! -z $client_truststore ] && [ ! -z $client_truststore_pass ]; then
+            keytool -list -v -keystore $client_truststore -storepass $client_truststore_pass > "$DATA_DIR/conf/security/client-truststore.txt" 2>&1
+        fi
+    fi
+    if [ ! -z $is_server_ssl_enabled ]; then
+        if [ $is_server_ssl_enabled = "all" ] || [ $is_server_ssl_enabled = "dc" ] || [ $is_server_ssl_enabled = "rack" ]; then
+            debug "collecting keystore and truststore for server_encryption_options"
+            server_keystore=$(find_yaml_sub_property server_encryption_options keystore)
+            server_keystore_pass=$(find_yaml_sub_property server_encryption_options keystore_password)
+            server_truststore=$(find_yaml_sub_property server_encryption_options truststore)
+            server_truststore_pass=$(find_yaml_sub_property server_encryption_options truststore_password)
+            if [ ! -z "$server_keystore" ] && [ ! -z "$server_keystore_pass" ]; then
+                keytool -list -v -keystore $server_keystore -storepass $server_keystore_pass > "$DATA_DIR/conf/security/server-keystore.txt" 2>&1
+            fi
+            if [ ! -z $server_keystore ] && [ ! -z $server_keystore_pass ]; then
+                keytool -list -v -keystore $server_truststore -storepass $server_truststore_pass > "$DATA_DIR/conf/security/server-truststore.txt" 2>&1
+            fi
+        fi
+    fi
+}
+
+# Two arguments:
+# 1) yaml property to begin searching
+# 2) yaml subproperty to find under 1
+# tolower and stripping quotes could be removed from this function in future to make this more general purpose
+# Currenly only supports property values with no spaces
+function find_yaml_sub_property {
+  awk_str="awk '/$1:/ {
+      getline;
+      while (\$0 ~ /^\s+|^#/) {
+        if (\$1 ~ /^$2:/) {
+          print tolower(\$2);
+          exit;
+        } else {
+          getline;
+        }
+      }
+    }'  \"$CONF_DIR/cassandra.yaml\"
+    | tr -d \"\\\"'\""
+  eval $awk_str
+}
+
 function create_directories {
     # Common for COSS / DDAC & DSE
     mkdir -p "$DATA_DIR"/{logs/cassandra,nodetool,conf/cassandra,driver,os-metrics,ntp}
     if [ -n "$IS_DSE" ]; then
         mkdir -p "$DATA_DIR"/{logs/tomcat,dsetool,conf/dse}
+    fi
+    if [ -n "$COLLECT_SSL" ]; then
+        mkdir -p "$DATA_DIR"/conf/security
     fi
 }
 
@@ -989,6 +1052,10 @@ if [ -n "$INSIGHTS_MODE" ]; then
     collect_insights
 else
     collect_data
+fi
+
+if [ -n "$COLLECT_SSL" ]; then
+    collect_ssl_info
 fi
 
 create_archive

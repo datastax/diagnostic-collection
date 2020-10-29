@@ -65,6 +65,7 @@ DEFAULT_INSIGHTS_DIR="/var/lib/cassandra/insights_data/insights"
 DEFAULT_MCAC_DIR="/var/lib/cassandra/mcac_data/insights"
 MODE="normal"
 NOSUDO=""
+JMX_OPTS=""
 
 # ---------------
 # Parse arguments
@@ -139,33 +140,33 @@ function debug {
 }
 
 function get_node_ip {
-    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+    CONN_ADDR="$(grep -E '^(native_transport_broadcast_address|broadcast_rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|head -n 1|tr -d "'")"
     if [ -z "$CONN_ADDR" ]; then
-        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+        CONN_ADDR="$(grep -E '^(native_transport_address|rpc_address): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|head -n 1|tr -d "'")"
     fi
     if [ -z "$CONN_ADDR" ]; then
-        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|head -n 1|tr -d "'")"
+        IFACE="$(grep -E '^(native_transport_interface|rpc_interface): ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|head -n 1|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
-                CONN_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
+                CONN_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*[ ]*$|\1|')"
             else
                 CONN_ADDR="$(ipconfig getifaddr "$IFACE")"
             fi
         fi
     fi
     # extract listen address
-    NODE_ADDR="$(grep -e '^broadcast_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+    NODE_ADDR="$(grep -e '^broadcast_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|tr -d "'")"
     if [ -z "$NODE_ADDR" ]; then
-        IFACE="$(grep -E '^listen_interface: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+        IFACE="$(grep -E '^listen_interface: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|tr -d "'")"
         if [ -n "$IFACE" ]; then
             if [ "$HOST_OS" = "Linux" ]; then
-                NODE_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*$|\1|')"
+                NODE_ADDR="$(ifconfig "$IFACE"|grep 'inet addr:'|sed -e 's|^.*inet addr:\([^ ]*\) .*[ ]*$|\1|')"
             else
                 NODE_ADDR="$(ipconfig getifaddr "$IFACE")"
             fi
         fi
         if [ -z "$NODE_ADDR" ]; then
-            NODE_ADDR="$(grep -e '^listen_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)$|\1|'|tr -d "'")"
+            NODE_ADDR="$(grep -e '^listen_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|tr -d "'")"
             if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
                 #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
                 if [ "$HOST_OS" = "Linux" ]; then
@@ -761,6 +762,13 @@ function collect_data {
         fi
     fi
 
+    # Collect metrics from JMX for OSS C* and DDAC
+    if [ -n "$IS_COSS" ] ; then 
+        if [ "$MODE" != "light" ]; then
+            $MAYBE_RUN_WITH_TIMEOUT java -jar ~/sjk-plus.jar mxdump $JMX_OPTS > "$DATA_DIR/jmx_dump.json" 2>&1
+        fi
+    fi
+
     # The rest of DSE-specific things
     if [ -n "$IS_DSE" ]; then
         if [ -f "$DSE_CONF_DIR/dse.yaml" ]; then
@@ -1008,6 +1016,10 @@ function adjust_nodetool_params {
     local jmx_port=7199
     local jmx_host=127.0.0.1
     local tmp=""
+
+    # Get the JMX user/password from the NT_OPTS and put them in a format that sjk will understand
+    JMX_OPTS=echo $NT_OPTS | sed -En "s/-u /--username /p" | sed -En "s/-pw /--password /p"
+
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         tmp=$(grep 'cassandra.jmx.local.port=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
         if [ -n "$tmp" ]; then
@@ -1035,6 +1047,8 @@ function adjust_nodetool_params {
     if [ "$jmx_host" != "127.0.01" ]; then
         NT_OPTS="$NT_OPTS -h $jmx_host"
     fi
+
+    JMX_OPTS="$JMX_OPTS -s $jmx_host:$jmx_port"
 }
 
 # Call functions in order

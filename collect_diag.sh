@@ -153,6 +153,10 @@ declare -A servers
 for host in $(cat "$HOST_FILE"); do
     debug "Copying collect_node_diag.sh to $host..."
     scp $SSH_OPTS "${LAUNCH_PATH}collect_node_diag.sh" "${host}:~/"
+    if [ "$TYPE" = "coss" ]; then
+        debug "Copying sjk jar to $host..."
+        scp $SSH_OPTS "${LAUNCH_PATH}libs/sjk-plus.jar" "${host}:~/"
+    fi
     RES=$?
     if [ $RES -ne 0 ]; then
         echo "Error during execution SCP, copying script to host $host, exiting..."

@@ -111,7 +111,7 @@ for i in "$DIAGS_DIR"/${PATTERN}-*.tar.gz; do
 done
 
 if [ -z "$INSIGHTS" ]; then # processing just DSE diagnostic
-    CLUSTER_NAME="$(cat -- */conf/cassandra/cassandra.yaml|grep -e '^cluster_name: '|sed -e "s|^cluster_name:[ ]*\(.*\)\$|\1|"|tr -d "'"|head -n 1|tr ' ' '_')"
+    CLUSTER_NAME=$(cat -- */conf/cassandra/cassandra.yaml|grep -e '^cluster_name: '|sed -e "s|^cluster_name:[ ]*\(.*\)\$|\1|"|tr -d "'"|head -n 1|tr ' ' '_'| tr '"' '_')
     COLLECT_DATE="$(date '+%Y-%m-%d_%H_%M_%S')"
     echo "Cluster name='$CLUSTER_NAME' collected at $COLLECT_DATE"
 

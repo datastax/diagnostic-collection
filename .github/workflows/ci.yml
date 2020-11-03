@@ -7,7 +7,6 @@ on:
 
 jobs:
   spin-up-cluster:
-    strategy:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v1
@@ -33,7 +32,7 @@ jobs:
     - name: Spin up cluster
       run: |
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"
-  tear-down-cluster: 
-    - name: Lint with flake8
+    - name: Tear down
+      if: ${{ always() }}
       run: |
         tlp-cluster down --auto-approve

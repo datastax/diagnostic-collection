@@ -48,39 +48,41 @@ jobs:
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"
           tlp-cluster up --auto-approve
           tlp-cluster use 3.11.7
-          success=0
-          attempts=1
-          while [ $success -eq  0 ] && [ $attempts -lt 5 ];
-          do
-              echo "Installing packages (attempt $attempts)"
-              tlp-cluster install > install.log 2>&1 || echo "meh... install phase seem to have failed"
-              grep "try rerunning the install" install.log > /dev/null 2>&1
-              success=$? # 0 means we found errors in the logs, so we need to try again
-              attempts=$((attempts+1))
-          done
-
-          if [ $success -eq  0 ]
-          then
-              echo "tlp-cluster install failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
-              exit 1
-          fi
-
-          success=0
-          attempts=1
-          while [ $success -eq  0 ]  && [ $attempts -lt 5 ];
-          do
-              echo "Starting Cassandra (attempt $attempts)"
-              tlp-cluster start > start.log 2>&1 || echo "meh... start phase seem to have failed"
-              tail -3 start.log | grep "Non zero response returned" > /dev/null 2>&1
-              success=$?
-              attempts=$((attempts+1))
-          done
-
-          if [ $success -eq 0 ]
-          then
-              echo "tlp-cluster start failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
-              exit 1
-          fi
+          tlp-cluster install
+          tlp-cluster start
+#         success=0
+#         attempts=1
+#         while [ $success -eq  0 ] && [ $attempts -lt 5 ];
+#         do
+#             echo "Installing packages (attempt $attempts)"
+#             tlp-cluster install > install.log 2>&1 || echo "meh... install phase seem to have failed"
+#             grep "try rerunning the install" install.log > /dev/null 2>&1
+#             success=$? # 0 means we found errors in the logs, so we need to try again
+#             attempts=$((attempts+1))
+#         done
+#
+#         if [ $success -eq  0 ]
+#         then
+#             echo "tlp-cluster install failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
+#             exit 1
+#         fi
+#
+#         success=0
+#         attempts=1
+#         while [ $success -eq  0 ]  && [ $attempts -lt 5 ];
+#         do
+#             echo "Starting Cassandra (attempt $attempts)"
+#             tlp-cluster start > start.log 2>&1 || echo "meh... start phase seem to have failed"
+#             tail -3 start.log | grep "Non zero response returned" > /dev/null 2>&1
+#             success=$?
+#             attempts=$((attempts+1))
+#         done
+#
+#         if [ $success -eq 0 ]
+#         then
+#             echo "tlp-cluster start failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
+#             exit 1
+#         fi
     - name: Run diagnostics collection
       if: ${{ success() }}
       run: |

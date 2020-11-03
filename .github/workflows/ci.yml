@@ -13,6 +13,9 @@ jobs:
     - name: Compress the collector
       run: |
           tar czf diagnostic-collection.tar.gz ./*
+    - uses: webfactory/ssh-agent@v0.4.1
+      with:
+          ssh-private-key: ${{ secrets.TLP_CLUSTER_KEY }}
     - name: Install dependencies
       run: |
           sudo apt-get update

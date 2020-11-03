@@ -1,0 +1,39 @@
+name: Integration Tests
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  spin-up-cluster:
+    strategy:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install dependencies
+      run: |
+          sudo apt-get update
+          sudo apt-get install openjdk-8-jre -y
+          wget -O tlp-cluster.deb https://bintray.com/thelastpickle/tlp-tools-deb/download_file?file_path=tlp-cluster_0.5_all.deb
+          sudo dpkg -i tlp-cluster.deb
+          mkdir -p .tlp-cluster/profiles/default
+   
+          mv settings.yaml .tlp-cluster/profiles/default/
+          mv secret.pem .tlp-cluster/profiles/default/
+
+          sudo apt-get install     apt-transport-https     ca-certificates     curl     gnupg-agent     software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+            $(lsb_release -cs) \
+            stable"
+          sudo apt-get update
+          sudo apt-get install docker-ce docker-ce-cli containerd.io
+          sudo usermod -aG docker ${USER}
+    - name: Spin up cluster
+      run: |
+          tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"
+  tear-down-cluster: 
+    - name: Lint with flake8
+      run: |
+        tlp-cluster down --auto-approve

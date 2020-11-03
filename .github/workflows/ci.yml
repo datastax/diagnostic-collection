@@ -17,7 +17,7 @@ jobs:
       run: |
           sudo apt-get update
           sudo apt-get install openjdk-8-jre -y
-          wget -O tlp-cluster.deb https://bintray.com/thelastpickle/tlp-tools-deb/download_file?file_path=tlp-cluster_0.5_all.deb
+          wget -O tlp-cluster.deb https://bintray.com/thelastpickle/tlp-tools-deb/download_file?file_path=tlp-cluster_0.6_all.deb
           sudo dpkg -i tlp-cluster.deb
           mkdir -p /home/runner/.tlp-cluster/profiles/default
 

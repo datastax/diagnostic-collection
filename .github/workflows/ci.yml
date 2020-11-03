@@ -16,7 +16,7 @@ jobs:
           sudo apt-get install openjdk-8-jre -y
           wget -O tlp-cluster.deb https://bintray.com/thelastpickle/tlp-tools-deb/download_file?file_path=tlp-cluster_0.5_all.deb
           sudo dpkg -i tlp-cluster.deb
-          mkdir -p .tlp-cluster/profiles/default
+          mkdir -p /home/runner/.tlp-cluster/profiles/default
 
           sudo apt-get install     apt-transport-https     ca-certificates     curl     gnupg-agent     software-properties-common
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
@@ -34,9 +34,11 @@ jobs:
           set -e
           if [[ -n "${TLP_CLUSTER_KEY}" ]];
           then
-            printf "%s" "${TLP_CLUSTER_SETTINGS}" > .tlp-cluster/profiles/default/settings.yaml
-            printf "%s" "${TLP_CLUSTER_KEY}" > .tlp-cluster/profiles/default/secret.pem
+            printf "%s" "${TLP_CLUSTER_SETTINGS}" > /home/runner/.tlp-cluster/profiles/default/settings.yaml
+            printf "%s" "${TLP_CLUSTER_KEY}" > /home/runner/.tlp-cluster/profiles/default/secret.pem
           fi
+          ls -lrt /home/runner/.tlp-cluster/profiles/default/
+
     - name: Spin up cluster
       run: |
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"

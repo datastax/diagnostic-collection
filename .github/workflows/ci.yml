@@ -17,9 +17,6 @@ jobs:
           wget -O tlp-cluster.deb https://bintray.com/thelastpickle/tlp-tools-deb/download_file?file_path=tlp-cluster_0.5_all.deb
           sudo dpkg -i tlp-cluster.deb
           mkdir -p .tlp-cluster/profiles/default
-   
-          mv settings.yaml .tlp-cluster/profiles/default/
-          mv secret.pem .tlp-cluster/profiles/default/
 
           sudo apt-get install     apt-transport-https     ca-certificates     curl     gnupg-agent     software-properties-common
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
@@ -29,6 +26,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install docker-ce docker-ce-cli containerd.io
           sudo usermod -aG docker ${USER}
+    - name: Configure tlp-cluster
+      env:
+        TLP_CLUSTER_KEY: ${{ secrets.TLP_CLUSTER_KEY }}
+      run: |
+          set -e
+          if [[ -n "${TLP_CLUSTER_KEY}" ]];
+          then
+            mv secret.pem .tlp-cluster/profiles/default/
+            echo '${{ secrets.TLP_CLUSTER_SETTINGS }}' > .tlp-cluster/profiles/default/settings.yaml
+            echo '${TLP_CLUSTER_KEY}' > .tlp-cluster/profiles/default/secret.pem
+            home_dir=$(pwd)
+            sed -i 's,~,'"${home_dir}"',' ./settings.yaml 
+          fi
     - name: Spin up cluster
       run: |
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"

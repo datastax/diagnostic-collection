@@ -6,10 +6,13 @@ on:
   pull_request:
 
 jobs:
-  spin-up-cluster:
+  integration-tests:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v1
+    - name: Compress the collector
+      run: |
+          tar czf diagnostic-collection.tar.gz diagnostic-collection/
     - name: Install dependencies
       run: |
           sudo apt-get update
@@ -27,6 +30,7 @@ jobs:
           sudo apt-get install docker-ce docker-ce-cli containerd.io
           sudo usermod -aG docker ${USER}
     - name: Configure tlp-cluster
+      if: ${{ success() }}
       env:
         TLP_CLUSTER_KEY: ${{ secrets.TLP_CLUSTER_KEY }}
         TLP_CLUSTER_SETTINGS: ${{ secrets.TLP_CLUSTER_SETTINGS }}
@@ -39,9 +43,50 @@ jobs:
           fi
 
     - name: Spin up cluster
+      if: ${{ success() }}
       run: |
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"
           tlp-cluster up --auto-approve
+          tlp-cluster use 3.11.7
+          success=0
+          attempts=1
+          while [ $success -eq  0 ] && [ $attempts -lt 5 ];
+          do
+              echo "Installing packages (attempt $attempts)"
+              tlp-cluster install > install.log 2>&1 || echo "meh... install phase seem to have failed"
+              grep "try rerunning the install" install.log > /dev/null 2>&1
+              success=$? # 0 means we found errors in the logs, so we need to try again
+              attempts=$((attempts+1))
+          done
+
+          if [ $success -eq  0 ]
+          then
+              echo "tlp-cluster install failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
+              exit 1
+          fi
+
+          success=0
+          attempts=1
+          while [ $success -eq  0 ]  && [ $attempts -lt 5 ];
+          do
+              echo "Starting Cassandra (attempt $attempts)"
+              tlp-cluster start > start.log 2>&1 || echo "meh... start phase seem to have failed"
+              tail -3 start.log | grep "Non zero response returned" > /dev/null 2>&1
+              success=$?
+              attempts=$((attempts+1))
+          done
+
+          if [ $success -eq 0 ]
+          then
+              echo "tlp-cluster start failed after $attempts retries. Exiting (╯°□°)╯︵ ┻━┻"
+              exit 1
+          fi
+    - name: Run diagnostics collection
+      if: ${{ success() }}
+      run: |
+        source env.sh
+        scp diagnostic-collection.tar.gz cassandra0:/home/ubuntu
+        c0 "tar xvf diagnostic-collection.tar.gz && ./diagnostic-collection/collect_diag.sh -t coss -r -m extended -u 900"
     - name: Tear down
       if: ${{ always() }}
       run: |

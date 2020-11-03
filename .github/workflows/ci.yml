@@ -33,7 +33,6 @@ jobs:
           set -e
           if [[ -n "${TLP_CLUSTER_KEY}" ]];
           then
-            mv secret.pem .tlp-cluster/profiles/default/
             echo '${{ secrets.TLP_CLUSTER_SETTINGS }}' > .tlp-cluster/profiles/default/settings.yaml
             echo '${TLP_CLUSTER_KEY}' > .tlp-cluster/profiles/default/secret.pem
             home_dir=$(pwd)

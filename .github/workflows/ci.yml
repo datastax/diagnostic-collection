@@ -37,11 +37,11 @@ jobs:
             printf "%s" "${TLP_CLUSTER_SETTINGS}" > /home/runner/.tlp-cluster/profiles/default/settings.yaml
             printf "%s" "${TLP_CLUSTER_KEY}" > /home/runner/.tlp-cluster/profiles/default/secret.pem
           fi
-          ls -lrt /home/runner/.tlp-cluster/profiles/default/
 
     - name: Spin up cluster
       run: |
           tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit"
+          tlp-cluster up --auto-approve
     - name: Tear down
       if: ${{ always() }}
       run: |

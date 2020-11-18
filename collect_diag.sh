@@ -21,6 +21,7 @@ function usage() {
     echo " ----- Options --------"
     echo "   -c cqlsh_options - e.g \"-u user -p password\" etc. Ensure you enclose with \""
     echo "   -d dsetool_options - options to pass to dsetool. Syntax the same as \"-c\""
+    echo "   -e encryption key file - Key file for encryption of the generated tarball"
     echo "   -f file_name - file with list of hosts where to execute command (default - try to get list from 'nodetool status')"
     echo "   -k keystore_ssl_info - collect keystore and truststore information"   
     echo "   -i insights - collect only data for DSE Insights"
@@ -30,11 +31,15 @@ function usage() {
     echo "   -p pid - PID of DSE or DDAC process"
     echo "   -r - remove collected files after generation of resulting tarball"
     echo "   -s ssh/scp options - options to pass to SSH/SCP"
+    echo "   -B S3 bucket - AWS S3 bucket to upload the artifacts to"
+    echo "   -S S3 secret - AWS secret for the S3 upload"
+    echo "   -K S3 key - AWS key for the S3 upload"
+    echo "   -T ticket number - Ticket for the S3 upload and encrypted tarball naming"
     echo "   -u timeout - timeout for SSH in seconds (default: $TIMEOUT)"
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
-    echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
+    echo "   -P top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
 function check_type {
@@ -50,6 +55,35 @@ function debug {
         echo "[${DT}]: $1"
     fi
 }
+
+function s3_push() {
+  srcFilePath="$1"
+  dstFileName="$2"
+  ticket="$3"
+  s3_bucket="$4"
+  s3_key="$5"
+  s3_secret="$6"
+  timestamp="$7"
+  contentType="application/octet-stream"
+  s3Date="$(LC_ALL=C date -u +"%a, %d %b %Y %X %z")"
+  
+  resource="/${s3_bucket}/${ticket}-${timestamp}/${dstFileName}"
+  
+  stringToSign="PUT\n\n${contentType}\n${s3Date}\n${resource}"
+  signature=$(echo -en "${stringToSign}" | openssl sha1 -hmac "${s3_secret}" -binary | base64)
+  echo "Uploading ${srcFilePath} to s3://${s3_bucket}/${ticket}-${timestamp}/"
+  curl -X PUT -T "${srcFilePath}" \
+        -H "Host: ${s3_bucket}.s3.amazonaws.com" \
+        -H "Date: ${s3Date}" \
+        -H "Content-Type: ${contentType}" \
+        -H "Authorization: AWS ${s3_key}:${signature}" \
+        https://"${s3_bucket}.s3.amazonaws.com/${ticket}-${timestamp}/${dstFileName}"
+
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
 
 # ----------
 # Setup vars
@@ -69,16 +103,22 @@ REMOVE_OPTS=""
 INSIGHT_COLLECT_OPTS=""
 VERBOSE=""
 TYPE=""
+ENCRYPTION_KEY=""
+TICKET=""
+S3_BUCKET=""
+DSE_DDAC_ROOT=""
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:" opt; do
+while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
         d) DT_OPTS="$OPTARG"
+           ;;
+        e) ENCRYPTION_KEY="$OPTARG"
            ;;
         f) HOST_FILE="$OPTARG"
            ;;
@@ -115,6 +155,16 @@ while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:" opt; do
            fi
            COLLECT_OPTS="$COLLECT_OPTS -m $MODE"
            ;;
+        S) export DS_AWS_SECRET="$OPTARG"
+           ;;
+        K) export DS_AWS_KEY="$OPTARG"
+           ;;
+        B) S3_BUCKET="$OPTARG"
+           ;;
+        T) TICKET="$OPTARG"
+           ;;
+        P) DSE_DDAC_ROOT="$OPTARG"
+           ;;
         h) usage
            exit 0
            ;;
@@ -132,7 +182,6 @@ echo "Using output directory: ${OUT_DIR}"
 # ------------------------
 check_type
 
-DSE_DDAC_ROOT=$1
 if [ "$TYPE" = "ddac" ] && [ -z "$DSE_DDAC_ROOT" ]; then
     echo "You must specify root location of DDAC installation"
     usage
@@ -224,6 +273,13 @@ for host in "${hosts_success[@]}"; do
 done
 
 ${LAUNCH_PATH}generate_diag.sh -o "$OUT_DIR" -t "$TYPE" $REMOVE_OPTS $COLLECT_OPTS "$OUT_DIR"
+
+if [ -f "$ENCRYPTION_KEY" ] && [ -n "$TICKET" ] && [ -n "$S3_BUCKET" ]; then # encrypt and upload the generated tarball
+    tarball_path=$(ls $OUT_DIR/*.tar.gz)
+    ${LAUNCH_PATH}encrypt_and_upload.sh -e $ENCRYPTION_KEY -f $tarball_path -B $S3_BUCKET -T $TICKET
+else
+    echo "No valid encryption file provided. Tarball will not get encrypted nor uploaded."
+fi
 
 # do cleanup
 if [ -n "$TMP_HOST_FILE" ]; then

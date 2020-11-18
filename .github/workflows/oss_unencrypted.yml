@@ -40,17 +40,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install docker-ce docker-ce-cli containerd.io
           sudo usermod -aG docker ${USER}
+          sudo apt-get install awscli
     - name: Configure tlp-cluster
       if: ${{ success() }}
       env:
         TLP_CLUSTER_KEY: ${{ secrets.TLP_CLUSTER_KEY }}
         TLP_CLUSTER_SETTINGS: ${{ secrets.TLP_CLUSTER_SETTINGS }}
+        COLLECTOR_ENCRYPTION_KEY: ${{ secrets.COLLECTOR_ENCRYPTION_KEY }}
       run: |
           set -e
           if [[ -n "${TLP_CLUSTER_KEY}" ]];
           then
             printf "%s" "${TLP_CLUSTER_SETTINGS}" > /home/runner/.tlp-cluster/profiles/default/settings.yaml
             printf "%s" "${TLP_CLUSTER_KEY}" > /home/runner/.tlp-cluster/profiles/default/secret.pem
+            printf "%s" "${COLLECTOR_ENCRYPTION_KEY}" > /home/runner/encryption.key
           fi
           chmod 600 /home/runner/.tlp-cluster/profiles/default/secret.pem
 
@@ -69,12 +72,16 @@ jobs:
  
     - name: Run diagnostics collection
       if: ${{ success() }}
+      env:
+        DS_AWS_KEY: ${{ secrets.S3_AWS_KEY }}
+        DS_AWS_SECRET: ${{ secrets.S3_AWS_SECRET }}
       run: |
           shopt -s expand_aliases || setopt aliases
           source env.sh
           scp -F sshConfig diagnostic-collection.tar.gz cassandra0:/home/ubuntu
+          scp -F sshConfig /home/runner/encryption.key cassandra0:/home/ubuntu
           echo "Running the diagnostic collection..."
-          c0 "tar xvf diagnostic-collection.tar.gz && ./collect_diag.sh -t coss -r -m extended -u 900" > diag.log 2>&1
+          c0 "tar xvf diagnostic-collection.tar.gz && ./collect_diag.sh -t coss -r -m extended -u 900 -e /home/ubuntu/encryption.key -K ${DS_AWS_KEY} -S ${DS_AWS_SECRET} -B collector-dead-drop-test -T DSI-${GITHUB_RUN_NUMBER}" > diag.log 2>&1
           diag_tarball_path=$(grep "Complete diagnostics tarball is in" diag.log| cut -d'/' -f3)
           diag_tarball_name=$(grep "Complete diagnostics tarball is in" diag.log| cut -d'/' -f4)
           grep "Complete diagnostics tarball is in" diag.log
@@ -86,9 +93,26 @@ jobs:
           . ../venv/bin/activate
           echo "Running checks..."
           behave ../tests/integration/features -D artifacts-directory=$full_diag_dir
+    - name: Check artifacts presence in S3
+      if: ${{ success() }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET }}
+        AWS_DEFAULT_REGION: us-west-2
+      run: |
+          # Check that artifacts were uploaded to S3
+          artifacts=$(aws s3 ls s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER})
+          if [[ "$?" == 0 ]]; then
+            echo "Artifacts were successfully uploaded to S3. Cleaning up bucket..."
+            aws s3 rm --recursive s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER}
+          else
+            echo "Couldn't find artifacts in S3. Failing CI run."
+            exit 1
+          fi
     - name: Tear down
       if: ${{ always() }}
       run: |
           echo "Terminating instances, please be patient..."
           tlp-cluster down --auto-approve > down.log 2>&1
           tail -10 down.log
+

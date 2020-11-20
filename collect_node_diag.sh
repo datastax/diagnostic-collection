@@ -445,6 +445,7 @@ function collect_system_info() {
         if [ -n "$(command -v lscpu)" ]; then
             lscpu > "$DATA_DIR/os-metrics/lscpu" 2>&1
         fi
+        ps auxww > "$DATA_DIR/os-metrics/ps-aux.txt" 2>&1
         cat /proc/cpuinfo > "$DATA_DIR/os-metrics/cpuinfo" 2>&1
         cat /proc/meminfo > "$DATA_DIR/os-metrics/meminfo" 2>&1
         cat /proc/interrupts > "$DATA_DIR/os-metrics/interrupts" 2>&1

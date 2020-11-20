@@ -65,6 +65,8 @@ def _i_can_verify_the_content_of_the_file_for_a_random_node(context, filename):
         verify_java_version(context)
     elif filename == "process_limits":
         verify_process_limits(context)
+    elif filename == "ps-aux.txt":
+        verify_ps_file(context)
 
 def verify_os_release(context):
     node = get_random_node_path(context)
@@ -97,6 +99,11 @@ def verify_process_limits(context):
         content = fp.read()
         assert "Max open files" in content
         assert "Max file locks" in content
+
+def verify_ps_file(context):
+    node = get_random_node_path(context)
+    with open(os.path.join(context.artifact_directory, "nodes", node, "os-metrics/ps-aux.txt")) as fp:
+        assert "org.apache.cassandra.service.CassandraDaemon" in fp.read()
 
 def get_nodes(context):
     return list(filter(

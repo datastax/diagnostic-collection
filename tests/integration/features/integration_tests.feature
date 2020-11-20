@@ -39,3 +39,4 @@ Feature: OSS Integration tests
         And I can verify the content of the "process_limits" file for a random node
         And I can verify the content of the "java_version.txt" file for a random node
         And I can verify the content of the "java_cmdline" file for a random node
+        And I can verify the content of the "ps-aux.txt" file for a random node

@@ -125,7 +125,10 @@ if [ -z "$TICKET" ]; then
 fi
 
 if [ -z "$ENCRYPTION_KEY" ]; then
-    maybe_generate_key
+    if [ "$TARBALL_NAME" != "*.enc" ]; then
+        # Only encrypt unencrypted tarballs
+        maybe_generate_key
+    fi
 fi
 
 if [ -z "$TARBALL_NAME" ]; then
@@ -140,12 +143,21 @@ tarball_path=${TARBALL_NAME%/*}
 if [ "$tarball_path" == "$tarball" ]; then
     tarball_path="."
 fi
-echo "Encrypting $tarball..."
-SECRET=$(cat "${ENCRYPTION_KEY}")
-timestamp=$(date +"%b-%d-%H-%M")
-artifactPath="$tarball_path/$TICKET-$timestamp.tar.gz.enc"
-openssl enc -aes-256-cbc -salt -in "$TARBALL_NAME" -out "${artifactPath}" -pass pass:"${SECRET}"
-echo "Tarball was encrypted as ${artifactPath}"
-`s3_push "${artifactPath}" "$TICKET-$timestamp.tar.gz.enc" "$TICKET" "$S3_BUCKET" "$DS_AWS_KEY" "$DS_AWS_SECRET" "$timestamp"`
+
+# Encrypt if 
+if [ "$TARBALL_NAME" != "*.enc" ]; then
+    echo "Encrypting $tarball..."
+    SECRET=$(cat "${ENCRYPTION_KEY}")
+    timestamp=$(date +"%Y-%m-%d-%H")
+    artifactPath="$tarball_path/$TICKET-$timestamp.tar.gz.enc"
+    openssl enc -aes-256-cbc -salt -in "$TARBALL_NAME" -out "${artifactPath}" -pass pass:"${SECRET}"
+    echo "Tarball was encrypted as ${artifactPath}"
+else
+    echo "Tarball was already encrypted"
+    artifactPath=$TARBALL_NAME
+fi
+
+echo "Uploading encrypted archive to S3..."
+s3_push "${artifactPath}" "$TICKET-$timestamp.tar.gz.enc" "$TICKET" "$S3_BUCKET" "$DS_AWS_KEY" "$DS_AWS_SECRET" "$timestamp"
 `s3_push_complete_marker "$TICKET" "$S3_BUCKET" "$DS_AWS_KEY" "$DS_AWS_SECRET" "$timestamp" "$tarball_path"`
 echo "S3 upload finished with status $?" 

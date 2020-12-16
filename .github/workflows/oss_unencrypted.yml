@@ -97,6 +97,7 @@ jobs:
           . ../venv/bin/activate
           echo "Running checks..."
           behave ../tests/integration/features -D artifacts-directory=$full_diag_dir
+
     - name: Check artifacts presence in S3
       if: ${{ success() }}
       env:
@@ -104,18 +105,36 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET }}
         AWS_DEFAULT_REGION: us-west-2
       run: |
+          set +e
+          set -x
           # Check that artifacts were uploaded to S3
-          artifacts=$(aws s3 ls s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER})
+          aws s3 ls s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER} --recursive
+          artifacts=$(aws s3 ls s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER} --recursive | grep tar.gz.enc)
           if [[ "$?" == 0 ]]; then
-            echo "Artifacts were successfully uploaded to S3. Cleaning up bucket..."
-            aws s3 rm --recursive s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER}
+            echo "Artifacts were successfully uploaded to S3"
           else
             echo "Couldn't find artifacts in S3. Failing CI run."
-            exit 1
+            exit 2
           fi
+
+          # Check if the completion marker is present
+          marker=$(aws s3 ls s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER} --recursive | grep collector_upload)
+          if [[ "$?" == 0 ]]; then
+            echo "The completion marker is present alongside the artefacts"
+          else
+            echo "The completion marker was not presen alongside the artefacts"
+            exit 3
+          fi
+
     - name: Tear down
       if: ${{ always() }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET }}
+        AWS_DEFAULT_REGION: us-west-2
       run: |
+          echo "Cleaning up the test bucket..."
+          aws s3 rm --recursive s3://collector-dead-drop-test/DSI-${GITHUB_RUN_NUMBER} || true
           echo "Terminating instances, please be patient..."
           timeout --foreground 600 tlp-cluster down --auto-approve > down.log 2>&1
           tail -10 down.log

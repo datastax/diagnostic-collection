@@ -97,6 +97,7 @@ jobs:
           . ../venv/bin/activate
           echo "Running checks..."
           behave ../tests/integration/features -D artifacts-directory=$full_diag_dir
+          openssl version
 
     - name: Check artifacts presence in S3
       if: ${{ success() }}

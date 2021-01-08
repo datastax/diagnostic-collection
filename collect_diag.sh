@@ -112,7 +112,7 @@ DSE_DDAC_ROOT=""
 # Parse arguments
 # ---------------
 
-while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P" opt; do
+while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
@@ -226,7 +226,7 @@ done
 declare -A pids
 for host in "${!servers[@]}"; do
     NODE_OUT_DIR="${servers[$host]}"
-    ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' '$DSE_DDAC_ROOT'" &
+    ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' -P '$DSE_DDAC_ROOT'" &
     pids[$host]="${!}"
 done
 

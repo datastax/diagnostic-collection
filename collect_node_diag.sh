@@ -26,7 +26,7 @@ function usage() {
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
-    echo "   path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
+    echo "   -P path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
 }
 
 #echo "Got args $*"
@@ -66,12 +66,13 @@ DEFAULT_MCAC_DIR="/var/lib/cassandra/mcac_data/insights"
 MODE="normal"
 NOSUDO=""
 JMX_OPTS=""
+ROOT_DIR=""
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hzivkn:c:p:f:d:o:t:I:m:" opt; do
+while getopts ":hzivkn:c:p:f:d:o:t:I:m:P:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -104,6 +105,8 @@ while getopts ":hzivkn:c:p:f:d:o:t:I:m:" opt; do
            ;;
         v) VERBOSE=true
            ;;
+        P) ROOT_DIR="$OPTARG"
+           ;;
         h) usage
            exit 0
            ;;
@@ -114,7 +117,7 @@ while getopts ":hzivkn:c:p:f:d:o:t:I:m:" opt; do
     esac
 done
 shift "$((OPTIND -1))"
-ROOT_DIR="$1"
+
 
 mkdir -p "${OUTPUT_DIR}"
 

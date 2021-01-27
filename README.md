@@ -38,6 +38,7 @@ installation (pass `-h` to get a list of all options):
 * `-e` - key file for encryption of the generated tarball
 * `-i` - specifies that we need to collect insights data ([DSE Metrics Collector](https://docs.datastax.com/en/monitoring/doc/monitoring/opsUseMetricsCollector.html) and [Metric Collector for Apache Cassandra](https://github.com/datastax/metric-collector-for-apache-cassandra))
 * `-I` - specifies directory that contains insights `.gz` files (default is `/var/lib/cassandra/insights_data/insights`)
+* `-k` - collect keystore and truststore information via Java's `keytool`
 * `-K` - AWS key for the S3 upload (Can be stored as the `DS_AWS_KEY` environment variable instead)
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:
  `normal`). See [section below for information on what is collected](#what-is-collected):
@@ -136,6 +137,7 @@ enabled for Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of o
   some automation)
 * `-i` - specifies that we need to collect data for  insights data ([DSE Metrics Collector](https://docs.datastax.com/en/monitoring/doc/monitoring/opsUseMetricsCollector.html) and [Metric Collector for Apache Cassandra](https://github.com/datastax/metric-collector-for-apache-cassandra))
 * `-I` - specifies directory that contains insights `.gz` files (default is `/var/lib/cassandra/insights_data/insights`)
+* `-k` - collect keystore and truststore information via Java's `keytool`
 * `-m` - specifies the collection mode: `light`, `normal`, `extended` (default:
  `normal`). See [section below for information on what is collected](#what-is-collected):
  * `light` - collect only necessary information - logs, schema, nodetool, base system

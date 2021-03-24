@@ -819,7 +819,7 @@ function collect_data {
 
         # collect DSE Search data
         debug "Collecting DSE Search information..."
-        for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' "$DATA_DIR/driver/schema" 2>/dev/null|sed -e 's|^.* ON \([^ ]*\) (solr_query).*$|\1|'|tr -d '"'); do
+		for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' "$DATA_DIR/driver/schema"  2>/dev/null |sed -e 's|^.* ON \([^ ]*\) (.*).*$|\1|'|tr -d '"' | uniq); do
             debug "collecting data for DSE Search core $core"
             mkdir -p "$DATA_DIR/solr/$core/"
             # it's faster to execute cqlsh than dsetool, but it's internal info

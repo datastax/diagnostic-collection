@@ -27,6 +27,7 @@ function usage() {
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
     echo "   -P path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
+    echo "   -e timeout - e.g. \"-e 600\" allow for a longer timeout on operations"
 }
 
 #echo "Got args $*"
@@ -67,12 +68,13 @@ MODE="normal"
 NOSUDO=""
 JMX_OPTS=""
 ROOT_DIR=""
+TIMEOUT="120"
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hzivkn:c:p:f:d:o:t:I:m:P:" opt; do
+while getopts ":hzivkne:c:p:f:d:o:t:I:m:P:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -107,6 +109,8 @@ while getopts ":hzivkn:c:p:f:d:o:t:I:m:P:" opt; do
            ;;
         P) ROOT_DIR="$OPTARG"
            ;;
+        e) TIMEOUT="$OPTARG"
+           ;;
         h) usage
            exit 0
            ;;
@@ -132,7 +136,7 @@ fi
 
 MAYBE_RUN_WITH_TIMEOUT=""
 if [ -n "$(command -v timeout)" ]; then
-    MAYBE_RUN_WITH_TIMEOUT="timeout --foreground 120"
+    MAYBE_RUN_WITH_TIMEOUT="timeout --foreground $TIMEOUT"
 fi
 
 function debug {

@@ -74,7 +74,7 @@ TIMEOUT="120"
 # Parse arguments
 # ---------------
 
-while getopts ":hzivkne:c:p:f:d:o:t:I:m:P:" opt; do
+while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;

@@ -112,7 +112,7 @@ DSE_DDAC_ROOT=""
 # Parse arguments
 # ---------------
 
-while getopts ":hzivrkn:c:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:" opt; do
+while getopts ":hzivrk:c:n:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;

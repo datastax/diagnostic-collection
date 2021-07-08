@@ -89,7 +89,6 @@ function s3_push() {
 # Setup vars
 # ----------
 
-NT_OPTS=""
 CQLSH_OPTS=""
 DT_OPTS=""
 OLDWD="$(pwd)"
@@ -192,7 +191,7 @@ TMP_HOST_FILE=""
 if [ -z "$HOST_FILE" ] || [ ! -f "$HOST_FILE" ]; then
     echo "File with hosts isn't specified, or doesn't exist, using 'nodetool status'"
     TMP_HOST_FILE=${OUT_DIR}/diag-hosts.$$
-    nodetool status|grep -e '^UN'|sed -e 's|^UN [ ]*\([^ ]*\) .*$|\1|' > "$TMP_HOST_FILE"
+    nodetool $NT_OPTS status|grep -e '^UN'|sed -e 's|^UN [ ]*\([^ ]*\) .*$|\1|' > "$TMP_HOST_FILE"
     HOST_FILE=$TMP_HOST_FILE
 fi
 

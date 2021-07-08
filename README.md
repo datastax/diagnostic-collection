@@ -154,6 +154,8 @@ enabled for Cassandra or JMX, changed JMX port, etc. (pass `-h` to get list of o
 * `-t` - specifies the type of installation: `dse`, `ddac`, `coss`  (default: `dse`)
 * `-v` - enables more verbose output by all scripts
 * `-z` - don't execute commands that require `sudo`
+* `-P` - path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
+* `-e` - timeout - e.g. \"-e 600\" allow for a longer timeout on operations"
 
 After successful execution, script generates file with name
 `/var/tmp/dse-diag-<IP_Address>.tar.gz`, like, `/var/tmp/dse-diag-10.200.179.237.tar.gz`,

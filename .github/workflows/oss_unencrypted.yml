@@ -67,7 +67,7 @@ jobs:
           timeout --foreground 120 tlp-cluster init DS DSI-58 "Integration tests for the DS diagnostic toolkit" -c 3 --instance m5.large > /dev/null 2>&1
           echo "Spinning up EC2 instances..."
           timeout --foreground 120 tlp-cluster up --auto-approve > /dev/null 2>&1
-          timeout --foreground 180 tlp-cluster use 3.11.7 --config "cluster_name:diag_integration_tests" > /dev/null 2>&1
+          timeout --foreground 180 tlp-cluster use 3.11.10 --config "cluster_name:diag_integration_tests" > /dev/null 2>&1
           echo "Installing packages..."
           timeout --foreground 600 tlp-cluster install > install.log 2>&1 || echo "meh... install phase seem to have failed"
           echo "Starting Cassandra..."

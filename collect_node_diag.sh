@@ -27,6 +27,8 @@ function usage() {
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
     echo "   -P path - top directory of COSS, DDAC or DSE installation (for tarball installs)"
+    echo "   -C path - explicitly set Cassandra configuration location"
+    echo "   -D path - explicitly set DSE configuration location"
     echo "   -e timeout - e.g. \"-e 600\" allow for a longer timeout on operations"
 }
 
@@ -74,7 +76,7 @@ TIMEOUT="120"
 # Parse arguments
 # ---------------
 
-while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:" opt; do
+while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:C:D:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -108,6 +110,10 @@ while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:" opt; do
         v) VERBOSE=true
            ;;
         P) ROOT_DIR="$OPTARG"
+           ;;
+        C) CONF_DIR="$OPTARG"
+           ;;
+        D) DSE_CONF_DIR="$OPTARG"
            ;;
         e) TIMEOUT="$OPTARG"
            ;;
@@ -247,10 +253,12 @@ function set_paths {
     debug "LOG_DIR=${LOG_DIR}"
     debug "TMP_DIR=${TMP_DIR}"
 
-    [[ -d "$CONF_DIR" ]] || { echo "Missing CONF_DIR"; exit 1; }
-    [[ -z "${DSE_CONF_DIR}" || -d "$DSE_CONF_DIR" ]] || { echo "Missing DSE_CONF_DIR"; exit 1; }
-    [[ -d "$BIN_DIR" ]] || { echo "Missing BIN_DIR"; exit 1; }
-    [[ -d "$TMP_DIR" ]] || { echo "Missing TMP_DIR"; exit 1; }
+    [[ -d "$CONF_DIR" ]] || { echo "The CONF_DIR doesn't exist"; exit 1; }
+    if [ -n "$IS_DSE" ]; then
+      [[ -d "$DSE_CONF_DIR" ]] || { echo "The DSE_CONF_DIR doesn't exist"; exit 1; }
+    fi
+    [[ -d "$BIN_DIR" ]] || { echo "BIN_DIR points to a non-existing directory"; exit 1; }
+    [[ -d "$TMP_DIR" ]] || { echo "TMP_DIR points to a non-existing directory"; exit 1; }
 }
 
 function detect_install {

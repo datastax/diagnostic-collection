@@ -40,6 +40,8 @@ function usage() {
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
     echo "   -P top directory of COSS, DDAC or DSE installation (for tarball installs)"
+    echo "   -C path - explicitly set Cassandra configuration location"
+    echo "   -D path - explicitly set DSE configuration location"
 }
 
 function check_type {
@@ -106,12 +108,14 @@ ENCRYPTION_KEY=""
 TICKET=""
 S3_BUCKET=""
 DSE_DDAC_ROOT=""
+CONF_DIR=""
+DSE_CONF_DIR=""
 
 # ---------------
 # Parse arguments
 # ---------------
 
-while getopts ":hzivrk:c:n:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:" opt; do
+while getopts ":hzivrk:c:n:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:C:D:" opt; do
     case $opt in
         c) CQLSH_OPTS="$OPTARG"
            ;;
@@ -163,6 +167,10 @@ while getopts ":hzivrk:c:n:d:f:o:p:s:t:u:I:m:e:S:K:T:B:P:" opt; do
         T) TICKET="$OPTARG"
            ;;
         P) DSE_DDAC_ROOT="$OPTARG"
+           ;;
+        C) CONF_DIR="$OPTARG"
+           ;;
+        D) DSE_CONF_DIR="$OPTARG"
            ;;
         h) usage
            exit 0
@@ -225,7 +233,7 @@ done
 declare -A pids
 for host in "${!servers[@]}"; do
     NODE_OUT_DIR="${servers[$host]}"
-    ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' -P '$DSE_DDAC_ROOT'" &
+    ssh $SSH_OPTS $host "bash --login ./collect_node_diag.sh -t $TYPE -o $NODE_OUT_DIR $COLLECT_OPTS $INSIGHT_COLLECT_OPTS -c '$CQLSH_OPTS' -n '$NT_OPTS' -d '$DT_OPTS' -P '$DSE_DDAC_ROOT' -C '$CONF_DIR' -D '$DSE_CONF_DIR'" &
     pids[$host]="${!}"
 done
 

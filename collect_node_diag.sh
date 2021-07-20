@@ -572,6 +572,7 @@ function collect_system_info() {
     # Collect uname info (for Linux)
     debug "Collecting uname info..."
     if [ "$HOST_OS" = "Linux" ]; then
+        cat /etc/*-release > "$DATA_DIR/os.txt"
         {
             echo "kernel_name: $(uname -s)"
             echo "node_name: $(uname -n)"

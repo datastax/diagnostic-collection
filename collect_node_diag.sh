@@ -1035,7 +1035,7 @@ function adjust_nodetool_params {
     local tmp=""
 
     # Get the JMX user/password from the NT_OPTS and put them in a format that sjk will understand
-    JMX_OPTS=echo $NT_OPTS | sed -En "s/-u /--username /p" | sed -En "s/-pw /--password /p"
+    JMX_OPTS=$(echo $NT_OPTS | sed -En "s/-u /--username /p" | sed -En "s/-pw /--password /p")
 
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         tmp=$(grep 'cassandra.jmx.local.port=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')

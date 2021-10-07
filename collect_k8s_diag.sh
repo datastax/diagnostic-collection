@@ -34,37 +34,38 @@ NUMBER_NODES=$(kubectl get cassandradatacenter -n $NS -o json | jq -r ".items[0]
 SECRET_NAME=$CLUSTER_NAME-superuser
 CASS_USER=$(kubectl -n $NS get secret $SECRET_NAME -o json | jq -r '.data.username' | base64 --decode)
 CASS_PASS=$(kubectl -n $NS get secret $SECRET_NAME -o json | jq -r '.data.password' | base64 --decode)
-NODE_PREFIX=$CLUSTER_NAME-$DC-$NS-sts
+DIR=$CLUSTER_NAME-$DC-$NS
 TAR=""
-
-declare -i counter=0
-declare -i endv=$NUMBER_NODES-1
+NODE_NAME=""
 
 function copy_node() {
-    NODE_NAME=$NODE_PREFIX-$counter
     echo "moving ./collect_node_diag.sh to $NODE_NAME"
     kubectl cp -n $NS -c cassandra ./collect_node_diag.sh $NODE_NAME:/opt/dse/collect_node_diag.sh
     kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- /opt/dse/collect_node_diag.sh -z -t dse -P /opt/dse -c "-u $CASS_USER -p $CASS_PASS"
     echo "capturings logs for $NODE_NAME"
     TAR=$(kubectl exec -n $NS -it $NODE_NAME -c cassandra -- ls -l  /var/tmp/ | grep ".tar.gz" | awk '{print $9}' | tr -d '\r')
+    kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- rm /opt/dse/collect_node_diag.sh
     echo "retrieving tarball '$TAR' from $NODE_NAME"
     if [ -z "$TAR" ]
     then
         echo "WARN no tarball collected for node $NODE_NAME skipping"
     else
-        kubectl cp -n $NS -c cassandra $NODE_NAME:/var/tmp/$TAR $NODE_PREFIX/nodes/$TAR
-        tar zxvf $NODE_PREFIX/nodes/$TAR  -C $NODE_PREFIX/nodes/
-        rm $NODE_PREFIX/nodes/$TAR
+        kubectl cp -n $NS -c cassandra $NODE_NAME:/var/tmp/$TAR $DIR/nodes/$TAR
+        kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- rm /var/tmp/$TAR
+        tar zxvf $DIR/nodes/$TAR  -C $DIR/nodes/
+        rm $DIR/nodes/$TAR
     fi
 }
 
-mkdir -p $NODE_PREFIX/nodes
-until [ $counter -gt $endv ]
+mkdir -p $DIR/nodes
+
+NODES=$(kubectl get pods -n $NS -l cassandra.datastax.com/datacenter=$DC -o name)
+for node in $NODES
 do
-   echo "copying node $NODE_PREFIX-$counter"
+   NODE_NAME=${node:4}
+   echo "copying node $NODE_NAME"
    copy_node
-((counter++))
 done
 
-tar czvf diagnostic.tar.gz $NODE_PREFIX
-rm -fr $NODE_PREFIX
+tar czvf diagnostic.tar.gz $DIR
+rm -fr $DIR

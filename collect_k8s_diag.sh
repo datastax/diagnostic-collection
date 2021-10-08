@@ -34,7 +34,8 @@ NUMBER_NODES=$(kubectl get cassandradatacenter -n $NS -o json | jq -r ".items[0]
 SECRET_NAME=$CLUSTER_NAME-superuser
 CASS_USER=$(kubectl -n $NS get secret $SECRET_NAME -o json | jq -r '.data.username' | base64 --decode)
 CASS_PASS=$(kubectl -n $NS get secret $SECRET_NAME -o json | jq -r '.data.password' | base64 --decode)
-DIR=$CLUSTER_NAME-$DC-$NS
+COLLECT_DATE="$(date -u '+%Y-%m-%d_%H_%M_%S')"
+DIR=$CLUSTER_NAME-diagnostics-${COLLECT_DATE}
 TAR=""
 NODE_NAME=""
 

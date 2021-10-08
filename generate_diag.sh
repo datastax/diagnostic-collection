@@ -112,7 +112,7 @@ done
 
 if [ -z "$INSIGHTS" ]; then # processing just DSE diagnostic
     CLUSTER_NAME=$(cat -- */conf/cassandra/cassandra.yaml|grep -e '^cluster_name: '|sed -e "s|^cluster_name:[ ]*\(.*\)\$|\1|"|tr -d "'"|head -n 1|tr ' ' '_'| tr '"' '_')
-    COLLECT_DATE="$(date '+%Y-%m-%d_%H_%M_%S')"
+    COLLECT_DATE="$(date -u '+%Y-%m-%d_%H_%M_%S')"
     echo "Cluster name='$CLUSTER_NAME' collected at $COLLECT_DATE"
 
     # Remove sensitive data

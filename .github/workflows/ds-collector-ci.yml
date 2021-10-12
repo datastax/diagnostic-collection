@@ -1,0 +1,66 @@
+name: DS-COLLECTOR CI
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - 'ds-collector/**'
+      - 'ds-collector-tests/**'
+  pull_request:
+    paths:
+      - 'ds-collector/**'
+      - 'ds-collector-tests/**'
+  release:
+    types:
+      - published
+
+jobs:
+  test-collector-ssh-docker:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+
+    - name: Test ds-collector
+      working-directory: ds-collector-tests
+      run: |
+        echo "Testing ds-collector"
+        make -f cluster-vanilla-ssh-docker.make
+
+  test-collector-k8s-cassandra:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+
+    - name: Test ds-collector
+      working-directory: ds-collector-tests
+      run: |
+        echo "Testing ds-collector"
+        make -f cluster-vanilla-k8s.make
+
+  test-collector-k8s-dse:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+
+    - name: Test ds-collector
+      working-directory: ds-collector-tests
+      run: |
+        echo "Testing ds-collector"
+        make -f cluster-dse-k8s.make
+

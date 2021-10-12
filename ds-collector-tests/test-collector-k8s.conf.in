@@ -1,0 +1,126 @@
+#
+# tlp_collector configuration file
+#
+#
+
+# base cassandra log and configuration directories
+# update if you aren't using the default directory
+#
+#logHome="/var/log/cassandra"
+#configHome="/etc/cassandra"
+basedir="/tmp/datastax-ds-collector-k8s-test/"
+
+# When the Cassandra nodes are inside docker containers
+# Use docker commands to connect to nodes instead of ssh
+# hostFile and hostName settings then need to use docker container IDs
+#
+# It is typical to also `skipSudo=true` (see below) on docker containers.
+#
+#use_docker="true"
+
+# When the Cassandra nodes are inside kubernetes pods
+# Use kubectl commands to connect to nodes instead of ssh
+# hostFile and hostName settings then need to use k8s pod names
+#
+# It is typical to also `skipSudo=true` (see below)
+#
+use_k8s="true"
+k8s_namespace="cass-operator"
+
+# base ssh options, do not override defaults
+# without completing a connection test
+#
+#sshOptionHostkeyCheck="false"
+#sshOptionAgentForwarding="true"
+#sshOptionVerbose="false"
+#sshOptionConnectTimeout="true"
+#sshOptionConnectAttempts="true"
+
+# if an identity file to authenticate to the target nodes
+# is needed, specify it in sshIdentity
+#
+#sshIdentity=""
+
+# if using password authentication for ssh and scp, specify
+# it in sshPassword (requires sshpass command)
+#
+#sshPassword="root"
+
+# add additional binary path if needed
+#
+addPath="/opt/java/openjdk/bin"
+
+# specify additional ssh options as needed for your environment
+# complete a connection test before adding extra options
+#
+#sshArgs=""
+#scpArgs=""
+
+# if you want to specify a file containing a list of hosts
+# use the qualified path to the list in hostFile
+#
+#hostFile=""
+
+# if you only have a single target node you want to collect from
+# you can enter the connection details here
+# setting a hostFile above will take precedence
+#
+#hostName=""
+
+# the user name to use when connecting to the target nodes(),
+# the user should have sudo access.
+# commenting userName will set the default to root
+#
+#userName="ubuntu"
+
+# the provided issue id to reference the artifacts
+# a generic issueId will be generated if not provided here
+#
+issueId="TEST_DS_COLLECTOR-001"
+
+# the JMX port to connect to when when gathering metrics via JMX
+# this will be the value that JMX_PORT is set to in the cassandra-env.sh file
+#
+#jmxPort="7199"
+#jmxUsername=""
+#jmxPassword=""
+
+# skip iostat and vmstat collection
+#
+#skipStat="true"
+
+# skip any calls that require sudo
+#
+skipSudo="true"
+
+# skip pushing artifacts to s3
+#
+skipS3="true"
+
+# uploads are encrypted by default
+#
+encrypt_uploads="false"
+
+# skip deleting artifact from central host after successful push to s3
+# this will keep a local copy of the artifact on the central host
+#
+keepArtifact="true"
+
+# s3 key
+# default key provided, only use to override
+#
+#keyId=""
+#keySecret=""
+
+# s3 auth
+# default is to use s3Auth to upload
+#
+
+# cqlsh authentication
+# Used to extract the schema
+#cqlshUsername=""
+#cqlshPassword=""
+
+# cqlsh SSL encryption
+#
+#$cqlshSSL="false"

@@ -1,0 +1,72 @@
+version: '3.2'
+
+services:
+  cassandra-00:
+    build:
+        context: .
+        dockerfile: integration-cassandra.docker
+    image: ds-collector:integration-cassandra
+    environment:
+        CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+        CASSANDRA_CLUSTER_NAME: cluster1
+        CASSANDRA_DC: dc1
+        CASSANDRA_RACK: r1
+        CASSANDRA_NUM_TOKENS: 16
+    healthcheck:
+        test: ["CMD", "nc", "-z", "cassandra-00", "9042"]
+        interval: 5s
+        timeout: 10s
+        retries: 60
+
+  cassandra-01:
+    build:
+        context: .
+        dockerfile: integration-cassandra.docker
+    image: ds-collector:integration-cassandra
+    depends_on:
+        - cassandra-00
+    environment:
+        CASSANDRA_SEEDS: cassandra-00
+        CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+        CASSANDRA_CLUSTER_NAME: cluster1
+        CASSANDRA_DC: dc1
+        CASSANDRA_RACK: r2
+        CASSANDRA_NUM_TOKENS: 16
+        CASSANDRA_WAIT_ON: cassandra-00
+        JVM_EXTRA_OPTS: '-Dcassandra.consistent.rangemovement=false -Dcassandra.ring_delay_ms=2000'
+    healthcheck:
+        test: ["CMD", "nc", "-z", "cassandra-01", "9042"]
+        interval: 5s
+        timeout: 10s
+        retries: 60
+
+  cassandra-02:
+    build:
+       context: .
+       dockerfile: integration-cassandra.docker
+    image: ds-collector:integration-cassandra
+    depends_on:
+       - cassandra-00
+    environment:
+       CASSANDRA_SEEDS: cassandra-00
+       CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
+       CASSANDRA_CLUSTER_NAME: cluster1
+       CASSANDRA_DC: dc2
+       CASSANDRA_RACK: r1
+       CASSANDRA_NUM_TOKENS: 16
+       CASSANDRA_WAIT_ON: cassandra-00
+       JVM_EXTRA_OPTS: '-Dcassandra.consistent.rangemovement=false -Dcassandra.ring_delay_ms=2000'
+    healthcheck:
+       test: ["CMD", "nc", "-z", "cassandra-02", "9042"]
+       interval: 5s
+       timeout: 10s
+       retries: 60
+
+  bastion:
+    build:
+        context: .
+        dockerfile: integration-bastion.docker
+    image: ds-collector:integration-bastion
+    volumes:
+      - ../ds-collector:/ds-collector
+      - ../ds-collector-tests:/ds-collector-tests

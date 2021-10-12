@@ -1,0 +1,1028 @@
+#!/bin/bash
+#
+# ds-collector
+#
+# Collect artifacts and ship for analysis
+#
+# The following are expected to be installed on the Cassandra/DSE nodes:
+#    blockdev
+#    date
+#    df
+#    ethtool
+#    hostname
+#    iostat
+#    lsblk
+#    lsof
+#    lspci
+#    lvdisplay
+#    lvs
+#    netstat
+#    ntpq
+#    ntpstat
+#    numactl
+#    ps
+#    pvdisplay
+#    sar
+#    slabtop
+#    sysctl
+#    uname
+#    uptime
+#
+# On a debian/ubuntu server these can be installed by running:
+#  `apt-get install -y procps  ethtool  lsof  net-tools  sysstat pciutils ntp ntpstat numactl lvm2 curl`
+#
+
+
+#set -x
+#trap read debug
+#
+
+update_path() {
+  if [[ -n $prependPath ]] ; then
+    export PATH="$prependPath:$PATH"
+  fi
+  if [[ -n $addPath ]] ; then
+    export PATH="$PATH:$addPath"
+  fi
+}
+
+
+update_env() {
+  # if nodes have specific environments that needs setting up/declaring, do so here
+  :
+}
+
+one_ping_only() {
+  baseMessage="ping test to $1"
+  #echo -e \\n"starting $baseMessage"
+  ping -c 1 "$1" > /dev/null 2>&1
+  statusState=$?
+  print_status_state
+}
+
+connection_test() {
+  read_host_name
+  if [ "$enablePingTest" ]; then one_ping_only "$hostName"; fi
+  baseMessage="connection test to $hostName"
+  echo -e \\n"starting $baseMessage"
+  node_connect 'date'
+  print_status_state
+  }
+
+connection_tests() {
+  # redirect to an unsued file descriptor
+  # as secure shell reads from standard input
+  if [ "$hostFile" ]; then
+    while read -u10 hostName; do
+      # shellcheck disable=SC1001
+      if [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
+        connection_test
+      fi
+      continue
+    done 10< "$hostFile"
+  else
+    # Test the address of the supplied node. If that is ok and $runOnSingleNode != true,
+    # then get the list of nodes in the cluster and test the connection to those nodes.
+    connection_test
+    connection_test_result="$?"
+    if [ "${connection_test_result}" -eq 0 ] && [[ ${runOnSingleNode} != "true" ]]
+    then
+      list_cassandra_nodes
+      for host in ${cassandraNodes}
+      do
+        # shellcheck disable=SC1001
+        hostName=$host
+        if [[ "$hostName" != \#* ]] && [ "$hostName" ]
+        then
+          connection_test
+        fi
+      done
+    fi
+  fi
+}
+
+# shellcheck disable=SC2086
+list_cassandra_nodes() {
+  # Check if adding password to nodetool is needed:
+  nodetoolCredentials=""
+  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
+  then
+    nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+  fi
+
+  # 'timeout -t SECS' is required on older busybox
+  TIMEOUT_OPT="3"
+  ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 3"
+  timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
+
+  nodetoolHost=''
+  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
+  if [ $? == 0 ]; then
+    nodetoolHost='-h localhost'
+    echo "Using localhost to connect to JMX..."
+  else
+    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
+    if [ $? == 0 ]; then
+      nodetoolHost="-h $(hostname)"
+      echo "Using $(hostname) to connect to JMX..."
+    fi
+  fi
+
+  cmd="nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
+  cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
+  statusState=$?
+  if [ $statusState == 0 ]; then
+    # ipaddresses need to be translated to docker container IDs
+    if [ "$use_docker" = "true" ]; then
+      translate_ipaddresses_to_docker_container_ids
+    elif [ "$use_k8s" = "true" ]; then
+      translate_ipaddresses_to_k8s_pod_names
+    fi
+  fi
+  for ip in ${cassandraNodes} ; do
+    ip -4 a | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
+  done
+  # also grab the cluster name
+  cmd="nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials describecluster"
+  clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
+  if [ $? == 0 ]; then
+    export clusterName
+    echo "Cluster name identified as ${clusterName}"
+  else
+    export clusterName=""
+  fi
+  return $statusState
+}
+
+translate_ipaddresses_to_docker_container_ids() {
+    declare -a container_ids
+    for host in ${cassandraNodes} ; do
+      for container_id in $(docker ps -q) ; do
+          if docker inspect "$container_id" | grep -q "IPAddress\": \"${host}" ; then
+              container_ids+=("${container_id}")
+              break
+          fi
+      done
+    done
+    cassandraNodes="${container_ids[*]}"
+}
+
+translate_ipaddresses_to_k8s_pod_names() {
+    declare -a pod_names
+    for host in ${cassandraNodes} ; do
+      pod_names+=("$(kubectl -n "$k8s_namespace" get pods -o wide | grep "${host}" | awk -F" " '{print $1}')")
+    done
+    cassandraNodes="${pod_names[*]}"
+}
+
+escape_special_chars() {
+  # Escapes all characters of "[ ] < > ! * ? | $ ` ; ( ) & # \"
+  # by adding a '\' to prefix them.
+  # This is normally not required, and so is commented out by default
+  #echo "$1" | sed -e 's/\([][><!\*\?|$`;()&#\\]\)/\\\1/g' ; return
+  echo "$1"
+}
+
+# shellcheck disable=SC2086
+node_connect() {
+  baseMessage="running command $1 on $hostName"
+  if [ "$use_docker" = "true" ]; then
+    node_connect_docker "$1"
+  elif [ "$use_k8s" = "true" ]; then
+    node_connect_k8s "$1"
+  else
+    node_connect_ssh "$1"
+  fi
+  # option to direct standard out and error to a log file and screen
+  statusState=$?
+  return $statusState
+}
+
+node_connect_docker() {
+  docker exec $docker_exec_args $hostName /bin/bash -c "$1"
+  # option to direct standard out and error to a log file and screen
+  statusState=$?
+  return $statusState
+}
+
+node_connect_k8s() {
+  kubectl -n "$k8s_namespace" exec -ti "$hostName" -- /bin/bash -c "$1"
+  # option to direct standard out and error to a log file and screen
+  statusState=$?
+  return $statusState
+}
+
+node_connect_ssh() {
+  ssh_command="ssh $userName@$hostName $sshArgs -n -t \"$1\" #> /dev/null 2>&1"
+  if [ -n "$sshPassword" ]; then
+    ssh_command="sshpass -p $sshPassword $ssh_command"
+  fi
+  eval "$ssh_command"
+  # option to direct standard out and error to a log file and screen
+  statusState=$?
+  return $statusState
+}
+
+bastion_checks() {
+  # pre-conditions
+  command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
+  [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
+  [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
+  [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
+  ! [ "$use_docker" = "true" ] || command -v docker >/dev/null 2>&1 || { echo >&2 "docker needs to be installed"; exit 1; }
+  ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
+  # revert the prometheus jarfile from text back to jarfile
+  [[ -f "$prometheus" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${prometheus/jar/txt}" | xxd -r -p > "$prometheus" ); }
+}
+
+node_checks() {
+  [[ -f "$baseDir/$prometheus" ]] || { echo >&2 "$baseDir/$prometheus must exist"; exit 1; }
+  [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
+  [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
+}
+
+read_host_name() {
+  if [ -z "$hostName" ]; then
+    echo -e "please enter a hostname or ip (or docker container id) and press [RETURN]: \c"
+    read hostName
+  fi
+}
+
+print_status_state() {
+  if [ "$statusState" = "0" ]; then
+    echo "$baseMessage: completed OK RC=$statusState"
+  else
+    echo "$baseMessage: completed NOTOK RC=$statusState"
+  fi
+}
+
+# shellcheck disable=SC2086
+bucket_dump() {
+  unset -v artifacts
+  artifacts=($baseDir/*artifacts*.tar.gz)
+
+  timestamp=$(date +"%b-%d-%H-%M")
+
+  for artifact in "${artifacts[@]}"
+  do
+    baseMessage="processing artifact $artifact"
+    encrypt_artifact "${artifact}"
+    if [ "$skipS3" != "true" ]; then
+      s3_push_artifact "${baseDir}/${artifact}" "${timestamp}"
+      if [ "$statusState" = "0" ] && [ "$keepArtifact" != "true" ]; then
+        rm ${baseDir}/${artifact}
+      fi
+    fi
+  done
+
+  if [ "$skipS3" != "true" ]; then
+    s3_push_complete_marker "${timestamp}"
+    echo "Pushed to S3 with timeID $timestamp"
+  fi
+  return $statusState
+}
+
+#
+# Push a file to the S3 dead-drop bucket
+#
+# Arguments:
+#  1 - srcFilePath: Full path to the file to push.
+#  2 - dstFileName: The name to assign the file in the S3 bucket.
+#  3 - timestamp:   Timestamp calculated for the execution of the collector.
+#  4 - contentType: MIME type the assign the file in the S3 bucket.
+#
+s3_push() {
+  srcFilePath="$1"
+  dstFileName="$2"
+  s3Date="$(LC_ALL=C date -u +"%a, %d %b %Y %X %z")"
+  timestamp="$3"
+  resource="/${bucket}/${issueId%-*}/${issueId}-${timestamp}/${dstFileName}"
+  contentType="$4"
+  stringToSign="PUT\n\n${contentType}\n${s3Date}\n${resource}"
+  signature=$(echo -en "${stringToSign}" | openssl sha1 -hmac "${keySecret}" -binary | base64)
+  curl -X PUT -T "${srcFilePath}" \
+        -H "Host: ${bucket}.s3.amazonaws.com" \
+        -H "Date: ${s3Date}" \
+        -H "Content-Type: ${contentType}" \
+        -H "Authorization: AWS ${keyId}:${signature}" \
+        https://"${bucket}.s3.amazonaws.com/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}"
+
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+encrypt_artifact() {
+  baseMessage="encrypting artifact $1"
+  artifact=$(echo "${artifact}" | awk -F\/ '{print $NF}')
+  if [ "$encrypt_uploads" != "false" ]; then
+    echo "Encrypting"
+    secretKeyFileName="${issueId}_secret.key"
+    # encrypt and use that
+    if [ ! -f "${secretKeyFileName}" ]; then
+      echo "${secretKeyFileName} does not exist"
+      exit 1
+    fi
+    SECRET=$(cat "${secretKeyFileName}")
+    openssl enc -aes-256-cbc -salt -in "$1" -out "$1.enc" -pass pass:"${SECRET}"
+  else
+    echo "WARNING: Not using encryption"
+  fi
+}
+
+s3_push_artifact() {
+  baseMessage="uploading to s3 artifact $1 with timestamp $2"
+  artifactPath=$1
+  artifact=$(echo "${artifactPath}" | awk -F\/ '{print $NF}')
+  mimeType=""
+  if [ "$encrypt_uploads" != "false" ]; then
+    [[ "${artifactPath}" == *.enc ]] || artifactPath="${artifactPath}.enc"
+    [[ "${artifact}" == *.enc ]] || artifact="${artifact}.enc"
+    mimeType="application/octet-stream"
+  else
+    artifactPath="$1"
+    mimeType="application/x-gzip"
+  fi
+  # shellcheck disable=SC1001
+  echo "Uploading to s3 artifact: ${artifact}"
+  s3_push "${artifactPath}" "${artifact}" "$2" "${mimeType}"
+  return ${statusState}
+}
+
+s3_push_complete_marker() {
+  artifact_count="${#artifacts[@]}"
+  node_count="${#cassandraNodes[@]}"
+  if [ "$artifact_count" == "$node_count" ]; then
+    completeFileName="collector_upload.complete"
+  else
+    completeFileName="collector_upload.incomplete"
+  fi
+  completeFilePath="${baseDir}/${completeFileName}"
+  echo "Expected ${artifact_count} artifacts. Cluster has ${node_count} nodes." > "${completeFilePath}"
+  echo "----" >> "${completeFilePath}"
+  for hostName in ${cassandraNodes} ; do
+    echo "${hostName} = $(node_connect 'hostname')" >> "${completeFilePath}"
+  done
+
+  s3_push "${completeFilePath}" "${completeFileName}" "$1" "text/plain"
+  rm -f ${completeFilePath}
+
+  return ${statusState}
+}
+
+sub_dir() {
+  artifactSubDir="$artifactDir/$1"
+  mkdir -p $artifactSubDir
+}
+
+# shellcheck disable=SC2086
+collect_via_rust() {
+  baseMessage="calling collect-info"
+  export baseDir
+  export logHome
+  export data_dir=${cassandra_data_dir}
+  export configHome
+  export skipSudo="${skipSudo:-false}"
+  export skip_dse="${skip_dse:-false}"
+  export prometheus_jar="${baseDir}/${prometheus}"
+  export jmxPort
+  export jmxUsername
+  export jmxPassword
+  export nodetoolHost
+  export nodetoolCredentials
+  export cqlsh_host="${cqlsh_host:-$(hostname)}"
+  export cqlshOpts
+  export cqlshPassword
+  export timeout_opts="$FOREGROUND_OPT $TIMEOUT_OPT"
+  export dse_bin_dir
+  export dt_opts
+  export no_nodesyncrate
+  export solr_data_dir
+  if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
+  ${baseDir}/collect-info "$server_pid" "$artifactDir" 
+  statusState=$?
+  print_status_state
+  # exit failure if collect-info fails
+  [[ 0 == $statusState ]] || exit $statusState
+  return $statusState
+}
+
+# shellcheck disable=SC2086
+collect_ethernet_device() {
+  baseMessage="getting network settings"
+  sub_dir "network"
+  # legacy eth network names
+  for ethernet_device in eth{0..9} ;do
+    ip a show $ethernet_device >> /dev/null 2>&1
+    if [ "$?" = "0" ] ; then
+      ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
+    fi
+  done
+  # udev en network names
+  for ethernet_device in $(ip -4 a | grep ": en" | cut -d":" -f2) ;do
+    ip a show $ethernet_device >> /dev/null 2>&1
+    if [ "$?" = "0" ] ; then
+      ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
+    fi
+  done
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+# shellcheck disable=SC2086
+collect_storage() {
+  baseMessage="getting storage settings"
+  sub_dir "storage"
+
+  for device in {/dev/sd*,/dev/xvd*,/dev/md*}
+  do
+    # shellcheck disable=SC1001
+    device=$(echo "$device"|awk -F\/ '{print $3}')
+   for queueType in read_ahead_kb scheduler
+    do
+      if [ -e "/sys/block/$device/queue/$queueType" ]; then
+        cat /sys/block/$device/queue/$queueType > "$artifactSubDir/$queueType-$device.txt"
+      fi
+    done
+  done
+
+  # Try to read the data and commitlog directories from config file.
+  # The multiple sed statements strip out leading / trailing lines
+  # and concatenate on the same line where multiple directories are
+  # configured to allow Nibbler to read it as a csv line
+  mkdir -p "$artifactDir/os-metrics"
+  cassandra_data_dir="/var/lib/cassandra/data"
+  if grep -q '^data_file_directories' "$configHome/cassandra.yaml" ; then
+    cassandra_data_dir=$(sed -n '/^data_file_directories:/,/^[^- ]/{//!p;};/^data_file_directories:/d' "$configHome/cassandra.yaml" | grep -e "^[ ]*-" | sed -e "s/^.*- *//" | tr $'\n' ',' | sed -e "s/.$/\n/")
+  fi
+  cassandra_commitlog_dir="/var/lib/cassandra/commitlog"
+  if grep -q '^commitlog_directory' "$configHome/cassandra.yaml" ; then
+    cassandra_commitlog_dir=$(grep -e "^commitlog_directory:" "$configHome/cassandra.yaml" |sed -e 's|^commitlog_directory:[ ]*\(.*\)[ ]*$|\1|')
+  fi
+  # Checks the data and commitlog variables are set. If not then
+  # read the JVM variable cassandra.storagedir and append paths as
+  # necessary.
+  if [ -f "$cassandra_data_dir" ]; then
+      echo "data: $cassandra_data_dir" > "$artifactDir/os-metrics/disk_config.txt" 2>&1
+  elif [ -f "$artifactDir/java_command_line.txt" ]; then
+      cassandra_data_dir=$(tr " " "\n" < "$artifactDir/java_command_line.txt" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/data"}')
+      echo "data: $cassandra_data_dir" > "$artifactDir/os-metrics/disk_config.txt" 2>&1
+      # todo, this can also be done by grepping against `ps -fax` (as jcmd is not available on many servers)
+  fi
+  if [ -f "$cassandra_commitlog_dir" ]; then
+      echo "commitlog: $cassandra_commitlog_dir" >> "$artifactDir/os-metrics/disk_config.txt" 2>&1
+  elif [ -f "$artifactDir/java_command_line.txt" ]; then
+      cassandra_commitlog_dir=$(tr " " "\n" < "$artifactDir/java_command_line.txt" | grep "cassandra.storagedir" | awk -F "=" '{print $2"/commitlog"}')
+      echo "commitlog: $cassandra_commitlog_dir" >> "$artifactDir/os-metrics/disk_config.txt" 2>&1
+      # todo, this can also be done by grepping against `ps -fax` (as jcmd is not available on many servers)
+  fi
+  # Since the data dir might have multiple items we need to check
+  # each one using df to verify the physical device
+  #for DEVICE in $(cat "$configHome/cassandra.yaml" | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
+  for device in $(echo "$cassandra_data_dir" | awk '{gsub(/,/,"\n");print}')
+  do
+      dm="$(df -h "$device" | grep -v "Filesystem" | awk '{print $1}')"
+      if [ -z "$data_mount" ]; then
+          data_mount="$dm"
+      else
+          data_mount="$DATA_MOUNT,$dm"
+      fi
+  done
+  commitlog_mount=$(df -h "$cassandra_commitlog_dir" | grep -v "Filesystem" | awk '{print $1}')
+  echo "data: $data_mount" > "$artifactDir/os-metrics/disk_device.txt" 2>&1
+  echo "commitlog: $commitlog_mount" >> "$artifactDir/os-metrics/disk_device.txt" 2>&1
+}
+
+collect_info_setup() {
+  update_path
+  update_env
+    
+  cqlshOpts="${cqlshOpts} --username=$cqlshUsername --password=$cqlshPassword"
+  if [ "$cqlshSSL" != "false" ]; then
+    echo "enabling ssl for cqlsh"
+    cqlshOpts="$cqlshOpts --ssl"
+  fi
+  mkdir -p "${artifactDir}/sstable-statistics/"
+  echo "DESCRIBE FULL SCHEMA;" > "$artifactDir/execute_schema.cql"
+  echo "DESCRIBE CLUSTER;" > "$artifactDir/execute_metadata.cql"
+
+  # 'timeout -t SECS' is required on older busybox
+  TIMEOUT_OPT="30"
+  ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 30"
+  timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
+
+  # Make our best guess on the host address to use to access nodetool/JMX
+  nodetoolHost=''
+  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
+  if [ $? == 0 ]; then
+    nodetoolHost='-h localhost'
+    echo "Using localhost to connect to JMX..."
+  else
+    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
+    if [ $? == 0 ]; then
+      nodetoolHost="-h $(hostname)"
+      echo "Using $(hostname) to connect to JMX..."
+    fi
+  fi
+
+  # Check if adding password to nodetool is needed:
+  nodetoolCredentials=""
+  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
+  then
+    nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+  fi
+
+  server_pid="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+  if [ -z "$server_pid" ] ; then
+    # no Cassandra server found, look for DSE
+    server_pid="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+  fi
+
+  # DSE
+  if [ "$is_dse" == "true" ]; then
+    # Check DSE package install
+    echo "DSE install: Checking install type..."
+    if [ -z "$dse_root_dir" ] && [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
+        echo "DSE install: package directories successfully found. Proceeding..."
+        dse_root_dir="/etc/dse/"
+        dse_bin_dir="/usr/bin/"
+        dse_conf_dir="/etc/dse/"
+    elif [ -d "$dse_root_dir" ] && [ -d "$dse_root_dir/resources/cassandra/conf" ] && [ -d "$dse_root_dir/resources/dse/conf" ]; then
+        echo "DSE install: tarball directories successfully found. Proceeding..."
+        dse_bin_dir="$dse_root_dir/bin/"
+        dse_conf_dir="$dse_root_dir/resources/dse/conf/"
+    else
+        echo "DSE install: no package or tarball directories found, or no tarball directory specified."
+        exit 1
+    fi
+    [[ -d "$dse_bin_dir" ]] || { echo "dse_bin_dir points to a non-existing directory"; exit 1; }
+    [[ -d "$dse_conf_dir" ]] || { echo "dse_conf_dir points to a non-existing directory $dse_conf_dir"; exit 1; }
+    configHome=$dse_conf_dir
+
+    # Versions to determine if nodesync available
+    dse_version="$($dse_bin_dir/dse -v)"
+    dse_major_version="$(echo $dse_version|sed -e 's|^\([0-9]\)\..*$|\1|')"
+    # collect nodesync rate
+    if ! [ "$dse_major_version" -le "5" ]; then
+        no_nodesyncrate=true
+    fi
+    
+    # DSE Search
+    solr_data_dir=$(grep -E '^solr_data_dir: ' "$dse_conf_dir/dse.yaml" 2>&1|sed -e 's|^solr_data_dir:[ ]*\(.*\)$|\1|')
+    # if it's not specified explicitly
+    if [ -z "$solr_data_dir" ] && [ -n "$cassandra_data_dir" ]; then
+        echo "No Solr directory is specified in dse.yaml, detecting from cassandra_data_dir: $cassandra_data_dir"
+        solr_data_dir="$(echo "$cassandra_data_dir"|sed -e 's|^\([^,]*\)\(,.*\)?$|\1|')/solr.data"
+    fi
+    echo "solr_data_dir is defined as: $solr_data_dir"
+  else
+    skip_dse="true"
+  fi
+}
+
+collect_info() {
+  node_checks
+  collect_info_setup
+  echo -e "starting artifact collection\n"
+  collect_ethernet_device
+  collect_storage
+  collect_via_rust
+  collect_dse_solr_cores
+  archive_artifacts
+}
+
+collect_dse_solr_cores() {
+    echo "Collecting DSE infomation…"
+
+    if [ "$is_dse" == "true" ]; then
+        # collect DSE Search data
+        echo "Collecting DSE Search information..."
+        for core in $(grep -e 'CREATE CUSTOM INDEX.*Cql3SolrSecondaryIndex' "$artifactDir/schema.cql"  2>/dev/null |sed -e 's|^.* ON \([^ ]*\) (.*).*$|\1|'|tr -d '"' | uniq); do
+            echo "collecting data for DSE Search core $core"
+            mkdir -p "$artifactDir/solr/$core/"
+            # it's faster to execute cqlsh than dsetool, but it's internal info
+            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/solrconfig.xml" 2>&1
+            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/schema.xml" 2>&1
+            $timeout_command $dse_bin_dir/dsetool $dt_opts list_core_properties "$core" > "$artifactDir/solr/$core/properties" 2>&1
+            $timeout_command $dse_bin_dir/dsetool $dt_opts core_indexing_status "$core" > "$artifactDir/solr/$core/status" 2>&1
+            $timeout_command $dse_bin_dir/dsetool $dt_opts list_index_files "$core" > "$artifactDir/solr/$core/index_files" 2>&1
+        done
+    fi
+}
+
+archive_artifacts() {
+  baseMessage="archiving current artifacts"
+  cd "$baseDir"
+  if [ "$skipSudo" != "true" ]; then
+    sudo chown -R "$(whoami)" "$artifactDir"
+  fi
+  # shellcheck disable=SC1001
+  # NF is number of fields, which the blanks in front of the first / is the first field
+  artifactName=$(echo "$artifactDir"|awk -F\/ '{print $NF}')
+  tar -zcvf "$artifactDir.tar.gz" "$artifactName" >> /dev/null 2>&1 && rm -rf "$artifactDir"
+  statusState=$?
+  echo "$artifactDir.tar.gz" > "$baseDir/$artifactFile"
+  print_status_state
+}
+
+halp() {
+  cat <<-EOF
+
+    $targetFile help
+    This script will connect to a target host
+    generate an artifact bundle and
+    transfer that bundle back to the execution host
+
+    usage: $targetFile [option1] [option2] [option...] [mode]
+
+    options:
+    -n=[HOST_IP | HOST_NAME | HOST_FILE_PATH]   IP address or hostname of Cassandra node to obtain
+                                                  the list of hosts to run collector on. Can also
+                                                  specify path to file with list of nodes or
+                                                  ip addresses.
+    -f=CONFIG_FILE_PATH     Path to a configuration file. Will override all defaults and options.
+    -a=ARTIFACT_PATH        Path to single artifact to upload to s3.
+    -p                      Ping the host prior to connecting to it. Can only be used with Test Mode.
+    -d                      Run script on a single node only, disabling auto discovery when the -n
+                              option specifies a hostname or IP address. Can only be used with
+                              Test Mode and Execute Mode.
+    -h                      Print this help and exit.
+
+    modes:
+    -T  Test Mode:      Complete a connection test.
+    -X  Execute Mode:   Execute collector on a cluster using arguments passed above.
+    -C  Client Mode:    Execute collector for only the node this script is run on. (internal use only)
+
+EOF
+}
+
+# shellcheck disable=SC2086
+set_ssh_options() {
+  if [ -z $userName ]; then userName="$defaultUserName"; fi
+  if [ -z $sshArgs ]; then
+    if [ "$sshOptionHostkeyCheck" = "false" ]; then sshArgs="$sshArgs -oStrictHostKeyChecking=no"; fi
+    if [ "$sshOptionAgentForwarding" = "true" ]; then sshArgs="$sshArgs -A"; fi
+    if [ $sshIdentity ]; then sshArgs="$sshArgs -i $sshIdentity" ; fi
+    if [ "$sshOptionVerbose" = "true" ]; then sshArgs="$sshArgs -v"; fi
+    if [ "$sshOptionConnectTimeout" = "true" ]; then sshArgs="$sshArgs -o ConnectTimeout=2"; fi
+    if [ "$sshOptionConnectAttempts" = "true" ]; then sshArgs="$sshArgs -o ConnectionAttempts=1"; fi
+  fi
+}
+
+# shellcheck disable=SC2086
+set_scp_options() {
+  if [ -z $userName ]; then userName="$defaultUserName"; fi
+  if [ -z $scpArgs ]; then
+    if [ $sshIdentity ]; then scpArgs="$scpArgs -i $sshIdentity" ; fi
+    if [ "$sshOptionVerbose" = "true" ]; then scpArgs="$scpArgs -v"; fi
+  fi
+}
+
+# shellcheck disable=SC2086
+node_push() {
+  baseMessage="push $1 to host $hostName"
+  if [ "$use_docker" = "true" ]; then
+    node_push_docker "$1" "$2"
+  elif [ "$use_k8s" = "true" ]; then
+    node_push_k8s "$1" "$2"
+  else
+    node_push_ssh "$1" "$2"
+  fi
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_push_docker() {
+  docker cp -a "$1" "$hostName:$2"
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_push_k8s() {
+  kubectl -n "$k8s_namespace" cp "$1" "$hostName:$2"
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_push_ssh() {
+  scp_command="scp $scpArgs $1 $userName@${hostName}:$2"
+  if [ -n "$sshPassword" ]; then
+    scp_command="sshpass -p $sshPassword $scp_command"
+  fi
+  $scp_command
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+# shellcheck disable=SC2086
+node_pull() {
+  baseMessage="pull $1 from host $hostName"
+  if [ "$use_docker" = "true" ]; then
+    node_pull_docker "$1" "$2"
+  elif [ "$use_k8s" = "true" ]; then
+    node_pull_k8s "$1" "$2"
+  else
+    node_pull_ssh "$1" "$2"
+  fi
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_pull_docker() {
+  docker cp "$hostName:$1" "$baseDir/."
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_pull_k8s() {
+  kubectl -n "$k8s_namespace" cp "$hostName:$1" "$baseDir/$(basename $1)"
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+node_pull_ssh() {
+  scp_command="scp $scpArgs $userName@${hostName}:${1} $baseDir/."
+  if [ -n "$sshPassword" ]; then
+    scp_command="sshpass -p $sshPassword $scp_command"
+  fi
+  $scp_command
+  statusState=$?
+  print_status_state
+  return $statusState
+}
+
+# shellcheck disable=SC2086
+read_config() {
+  baseMessage="read configuration from file"
+  # echo -e \\n"starting $baseMessage"
+  if [ -f $configPath ]; then
+    source $configPath
+    statusState=$?
+    copyConfig=true
+    collectionArgs+=(-f $baseDir/$configFile)
+  else
+    echo "config file $configPath was not found...exiting"
+    statusState=2
+  fi
+  print_status_state
+  if [ "$statusState" != "0" ]; then exit $statusState; fi
+}
+
+# shellcheck disable=SC2086,SC1001
+# Called from the primary machine
+get_infos() {
+  mkdir -p $baseDir
+  if [ "$?" != "0" ]; then
+    echo "we couldn't make our working directory: $baseDir...exiting"
+    exit 2
+  fi
+  if [ $hostFile ]; then
+    while read -u10 hostName; do
+      if [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
+        get_info
+      fi
+    done 10< $hostFile
+  elif [[ ${runOnSingleNode} != "true" ]] && [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
+    list_cassandra_nodes
+    for host in ${cassandraNodes}
+    do
+      hostName=$host
+      if [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
+        get_info
+      fi
+    done
+  else
+    get_info
+  fi
+}
+
+# shellcheck disable=SC2086,SC2016
+get_info() {
+  read_host_name
+  baseMessage="transfer of collection script and execute on $hostName"
+  node_connect 'mkdir -p '$baseDir''
+  if [ "$?" = "0" ]; then
+    node_push "$0" "$baseDir/$targetFile"
+
+    node_push "$script_directory/$prometheus" "$baseDir/$prometheus"
+    node_push "$script_directory/$dstat" "$baseDir/$dstat"
+    node_push "$script_directory/collect-info" "$baseDir/collect-info"
+
+    if [ "$copyConfig" ]; then
+      node_push "$configPath" "$baseDir/$(basename $configFile)"
+    fi
+
+    node_connect "chmod +x \"${baseDir}/$targetFile\""
+    node_connect "chmod +x \"${baseDir}/$dstat\""
+    node_connect "chmod +x \"${baseDir}/collect-info\""
+
+    if [ "$sudo_script_on_node" ]; then
+      node_connect "sudo $baseDir/$targetFile ${collectionArgs[*]}"
+      node_connect "sudo chown -R ${userName} '$baseDir'"
+    else
+      node_connect "$baseDir/$targetFile ${collectionArgs[*]}"
+    fi
+    latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile'')
+    latestArtifacts=$(echo $latestArtifacts|awk '{print $1}' | tr -d "\n\r")
+    echo "collecting artifact from $hostName ${latestArtifacts}"
+    ifconf=$(ip -4 a)
+    if [[ $ifconf == *"$hostName"* ]];
+    then
+      echo "Not pulling artifacts for localhost"
+    else
+      node_pull "${latestArtifacts}"
+      statusState=$?
+      node_connect "rm -f ${latestArtifacts}"
+    fi
+    baseMessage="result of datastax_collector from $hostName"
+  else
+    echo "connection to $hostName was not successful...skipping..."
+  fi
+  print_status_state
+}
+
+####### main
+script_directory=$(dirname "$0")
+date=$(date +'%Y_%m_%d_%H%M_%s')
+#logFile="$0.$date"
+baseDir="/tmp/datastax"
+artifactDir="$baseDir/$(hostname)_artifacts_$date"
+artifactFile="latest_artifacts.txt"
+
+# 'timeout --foreground' option is not supported on RHEL 6
+FOREGROUND_OPT="--foreground"
+( timeout --help | grep -q foreground ) || FOREGROUND_OPT=""
+
+# We're using the scraper functionality in the jmx_exporter for prometheus:
+# https://github.com/prometheus/jmx_exporter.git
+# It's built from the jmx_exporter/collector
+# it used to be a standalone tool
+
+prometheus="collector-0.11.1-SNAPSHOT.jar"
+
+dstat="dstat"
+
+targetFile=$(echo "$0"|awk -F\/ '{print $2}')
+
+# base cassandra
+logHome="/var/log/cassandra"
+configHome="/etc/cassandra"
+#dataHome="/var/lib/cassandra/data"
+
+# expected base ssh options
+# do not override
+sshOptionHostkeyCheck="false"
+sshOptionAgentForwarding="true"
+sshOptionVerbose="false"
+sshOptionConnectTimeout="true"
+sshOptionConnectAttempts="true"
+
+# k8s
+k8s_namespace="default"
+
+# JMX port
+jmxPort="7199"
+
+# reserved
+#logger="false"
+#set -x
+#trap read debug
+#export -f node_connect
+#typeset -fx node_connect
+
+# s3
+bucket="collector-dead-drop"
+#useS3Auth="true"
+
+cqlshUsername="cassandra"
+cqlshPassword="cassandra"
+cqlshSSL="false"
+
+# initialize arrays
+myArrays=(
+  collectionArgs
+  latestArtifacts
+  curlHeader
+  curlCmd
+  nodetoolCmds
+  proc_etc_files
+  subDirs
+  artifacts)
+
+for myArray in "${myArrays[@]}"
+do
+  unset -v $myArray
+done
+
+# initialize variables
+myVariables=(
+  sshArgs
+  scpArgs
+  hostName
+  hostFile
+  configFile
+  sshIdentity
+  enablePingTest
+  userName
+  skipStat
+  skipSudo
+  testMode
+  executeMode
+  clientMode
+  issueId
+  skipS3
+  keepArtifact
+  singleArtifact
+  cassandraNodes
+  dt_opts
+  sudo_script_on_node)
+
+for myVariable in "${myVariables[@]}"
+do
+  declare "$myVariable="""
+done
+
+# set options
+addPath="/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:/sbin"
+defaultUserName="root"
+collectionArgs=(-C)
+
+while getopts f:n:a:hHpdCT-X flag; do
+  case $flag in
+    f) configFile=$OPTARG ;;
+    n) hostName=$OPTARG ;;
+    a) singleArtifact="$OPTARG" ;;
+    p) enablePingTest="true" ;;
+    T) testMode="true" ;;
+    X) executeMode="true" ;;
+    C) clientMode="true" ;;
+    d) runOnSingleNode="true" ;;
+    h) halp; exit 4 ;;
+    H) halp; exit 4 ;;
+    \?) echo -e \\n"unknown option $OPTARG...sorry"\\n; halp; exit 2 ;;
+    : ) echo "option -$OPTARG requires an argument...sorry"; halp; exit 2;;
+  esac
+done
+
+if [ -z "$issueId" ]; then
+  issueId="DS-$date"
+fi
+
+if [ "$configFile" ]; then
+    configPath=$configFile
+    configFile=$(basename "$configFile")
+    read_config;
+fi
+
+set_ssh_options
+set_scp_options
+
+if [ -f "$hostName" ]; then
+  hostFile=$hostName
+fi
+
+if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
+then
+  jmxUsername=$(escape_special_chars "$jmxUsername")
+  jmxPassword=$(escape_special_chars "$jmxPassword")
+fi
+
+if [ $testMode ]; then
+  bastion_checks
+  connection_tests
+  exit $?
+elif [ $executeMode ]; then
+  bastion_checks
+  # Delete existing artifacts before we generate new ones
+  rm -f $baseDir/*.tar.gz
+  get_infos
+  bucket_dump
+  exit $?
+elif [ $clientMode ]; then
+  if [[ ${runOnSingleNode} == "true" ]] ; then
+    echo -e \\n"-d cannot be specified with -C"\\n; halp; exit 2 
+  fi
+  collect_info
+  exit $?
+elif [ "$singleArtifact" ]; then
+  bastion_checks
+  timestamp=$(date +"%b-%d-%H-%M")
+  if [[ "${singleArtifact}" == *.enc ]] ; then
+    encrypt_uploads="true"
+  else
+    encrypt_uploads="false"
+  fi
+  s3_push_artifact "$singleArtifact" "$timestamp"
+  exit $?
+fi
+
+echo -e  \\n"exiting...mode required!"; halp
+exit $?

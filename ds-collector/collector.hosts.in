@@ -1,0 +1,10 @@
+#
+# Specify the hostnames or IP addresses of the nodes the collector should contact.
+# Each hostname or IP address (or docker container ID or k8s pod name) entry should be on a separate line. e.g.
+#
+# node_01
+# 172.16.33.12
+#
+# The last line in this file must be empty for the ds-collector script to work correctly.
+# Begin the node list on the next line below this block comment.
+

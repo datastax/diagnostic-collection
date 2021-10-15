@@ -1061,7 +1061,7 @@ function adjust_nodetool_params {
     if [ "$jmx_port" != "7199" ]; then
         NT_OPTS="$NT_OPTS -p $jmx_port"
     fi
-    if [ "$jmx_host" != "127.0.01" ]; then
+    if [ "$jmx_host" != "127.0.0.1" ]; then
         NT_OPTS="$NT_OPTS -h $jmx_host"
     fi
 

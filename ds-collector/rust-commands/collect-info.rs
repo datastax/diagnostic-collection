@@ -57,6 +57,7 @@ fn main() {
         jmx_port: &env::var("jmxPort").unwrap_or("7199".to_string()),
         jmx_username: &env::var("jmxUsername").unwrap_or("".to_string()),
         jmx_password: &env::var("jmxPassword").unwrap_or("".to_string()),
+        jmx_ssl: bool::from_str(&env::var("jmxSSL").unwrap_or("false".to_string())).unwrap(),
         nodetool_host:  &env::var("nodetoolHost").unwrap_or("".to_string()),
         nodetool_credentials: &env::var("nodetoolCredentials").unwrap_or("".to_string()),
         cqlsh_host:  &env::var("cqlsh_host").unwrap_or("localhost".to_string()),
@@ -207,12 +208,21 @@ fn format_args(args: &str, options: &Options, mask: bool) -> String {
         .replace("{jmx_port}", options.jmx_port)
         .replace("{jmx_username}", options.jmx_username)
         .replace("{jmx_password}", &format_jmx_password(&options.jmx_password, mask))
+        .replace("{nodetool_ssl}", &nodetool_ssl(options.jmx_ssl))
         .replace("{nodetool_host}", options.nodetool_host)
         .replace("{nodetool_credentials}", &format_jmx_password(&options.nodetool_credentials, mask))
         .replace("{cqlsh_host}", options.cqlsh_host)
         .replace("{cqlsh_opts}", &format_cqlsh_opts(&options.cqlsh_opts, options.cqlsh_password, mask))
         .replace("{dt_opts}", options.dt_opts)
         .replace("{solr_data_dir}", options.solr_data_dir)
+}
+
+fn nodetool_ssl(jmx_ssl: bool) -> String {
+    if jmx_ssl {
+        "--ssl".to_string()
+    } else {
+        "".to_string()
+    }
 }
 
 fn format_jmx_password(jmx_password: &str, mask: bool) -> String {
@@ -275,6 +285,7 @@ struct Options<'a> {
     jmx_port: &'a str,
     jmx_username: &'a str,
     jmx_password: &'a str,
+    jmx_ssl: bool,
     nodetool_host: &'a str,
     nodetool_credentials: &'a str,
     cqlsh_host: &'a str,
@@ -326,7 +337,7 @@ const COMMANDS: &[Cmd<'static>] = &[
         args: "-cp {prometheus_jar} io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://127.0.0.1:{jmx_port}/jmxrmi {jmx_username} {jmx_password}",
         file: "metrics.jmx",
         optional: false,
-        skip_flags: "",
+        skip_flags: "jmxSSL", // JmxScaper does not support ssl jmx (FIXME)
         use_stdout: true,
         use_sudo: false,
         use_timeout: false,
@@ -885,7 +896,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     // nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials $nodetoolCmd > "$artifactSubDir/$nodetoolCmd.txt"
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} status",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} status",
         file: "nodetool/status.txt",
         optional: true,
         skip_flags: "",
@@ -895,7 +906,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} tpstats",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} tpstats",
         file: "nodetool/tpstats.txt",
         optional: true,
         skip_flags: "",
@@ -905,7 +916,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} cfstats",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} cfstats",
         file: "nodetool/cfstats.txt",
         optional: true,
         skip_flags: "",
@@ -915,7 +926,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} info",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} info",
         file: "nodetool/info.txt",
         optional: true,
         skip_flags: "",
@@ -925,7 +936,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} ring",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} ring",
         file: "nodetool/ring.txt",
         optional: true,
         skip_flags: "",
@@ -935,7 +946,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} version",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} version",
         file: "nodetool/version.txt",
         optional: true,
         skip_flags: "",
@@ -945,7 +956,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} proxyhistograms",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} proxyhistograms",
         file: "nodetool/proxyhistograms.txt",
         optional: true,
         skip_flags: "",
@@ -955,7 +966,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} compactionstats",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} compactionstats",
         file: "nodetool/compactionstats.txt",
         optional: true,
         skip_flags: "",
@@ -965,7 +976,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} describecluster",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} describecluster",
         file: "nodetool/describecluster.txt",
         optional: true,
         skip_flags: "",
@@ -975,7 +986,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} getcompactionthroughput",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} getcompactionthroughput",
         file: "nodetool/getcompactionthroughput.txt",
         optional: true,
         skip_flags: "",
@@ -985,7 +996,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} getstreamthroughput",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} getstreamthroughput",
         file: "nodetool/getstreamthroughput.txt",
         optional: true,
         skip_flags: "",
@@ -995,7 +1006,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} gossipinfo",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} gossipinfo",
         file: "nodetool/gossipinfo.txt",
         optional: true,
         skip_flags: "",
@@ -1005,7 +1016,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} netstats",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} netstats",
         file: "nodetool/netstats.txt",
         optional: true,
         skip_flags: "",
@@ -1015,7 +1026,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} statusbinary",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} statusbinary",
         file: "nodetool/statusbinary.txt",
         optional: true,
         skip_flags: "",
@@ -1025,7 +1036,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     Cmd {
         command: "nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} statusthrift",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} statusthrift",
         file: "nodetool/statusthrift.txt",
         optional: true,
         skip_flags: "",
@@ -1140,7 +1151,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     // $dse_bin_dir/nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials nodesyncservice getrate > "$artifactDir/nodetool/nodesyncrate"
     Cmd {
         command: "{dse_bin_dir}nodetool",
-        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} nodesyncservice getrate",
+        args: "{nodetool_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} nodesyncservice getrate",
         file: "nodetool/nodesyncrate.txt",
         optional: true,
         skip_flags: "skip_dse no_nodesyncrate",

@@ -109,6 +109,10 @@ list_cassandra_nodes() {
   then
     nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
   fi
+  jmxOpts=""
+  if [ "$jmxSSL" = "true" ]; then
+    jmxOpts="--ssl"
+  fi
 
   # 'timeout -t SECS' is required on older busybox
   TIMEOUT_OPT="3"
@@ -128,7 +132,7 @@ list_cassandra_nodes() {
     fi
   fi
 
-  cmd="nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
+  cmd="nodetool $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
   cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
   statusState=$?
   if [ $statusState == 0 ]; then
@@ -143,7 +147,7 @@ list_cassandra_nodes() {
     ip -4 a | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
   done
   # also grab the cluster name
-  cmd="nodetool $nodetoolHost -p $jmxPort $nodetoolCredentials describecluster"
+  cmd="nodetool $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
   clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
   if [ $? == 0 ]; then
     export clusterName
@@ -388,6 +392,7 @@ collect_via_rust() {
   export jmxPort
   export jmxUsername
   export jmxPassword
+  export jmxSSL
   export nodetoolHost
   export nodetoolCredentials
   export cqlsh_host="${cqlsh_host:-$(hostname)}"

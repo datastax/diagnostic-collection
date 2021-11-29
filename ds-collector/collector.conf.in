@@ -89,6 +89,7 @@
 #jmxPort="7199"
 #jmxUsername=""
 #jmxPassword=""
+#jmxSSL="false"
 
 # skip iostat and vmstat collection
 #

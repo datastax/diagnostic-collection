@@ -1,7 +1,7 @@
 ds-collector
 =============
 
-This script will connect to a target host generate an artifact bundle and transfer that bundle back to the execution host. From there they are pushed to a "dead drop" S3 bucket using HTTPS.
+This tool will connect to a target host, generate an artifact bundle, and transfer that bundle back to the execution host. Automatic uploads to a "dead drop" S3 bucket may occur.
 
 The package contains the three files:
 
@@ -49,13 +49,18 @@ Directions
 * Update all other options in `collector.conf` accordingly.
 * Test the connection with command
     ```
-    ./ds-collector -T -f collector.conf -n <contact point>
+    ./ds-collector -T -f collector.conf -n <CASSANDRA_CONTACT_POINT>
     ```
 * If test returns `NOTOK` please notify DataStax via email including the message.
 * Run the script to collect data and script will automatically upload to a secure S3 bucket.
     ```
     ./ds-collector -X -f collector.conf -n <CASSANDRA_CONTACT_POINT>
     ```
+
+
+Troubleshooting
+---------------
+
 * If you need to run the collector against a single node only use the `-d` option.
     ```
     ./ds-collector -X -d -f collector.conf -n <CASSANDRA_CONTACT_POINT>

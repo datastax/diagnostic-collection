@@ -309,7 +309,7 @@ s3_push() {
   dstFileName="$2"
   s3Date="$(LC_ALL=C date -u +"%a, %d %b %Y %X %z")"
   timestamp="$3"
-  resource="/${bucket}/${issueId%-*}/${issueId}-${timestamp}/${dstFileName}"
+  resource="/${bucket}/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}"
   contentType="$4"
   stringToSign="PUT\n\n${contentType}\n${s3Date}\n${resource}"
   signature=$(echo -en "${stringToSign}" | openssl sha1 -hmac "${keySecret}" -binary | base64)

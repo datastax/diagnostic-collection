@@ -11,6 +11,7 @@
 #    ethtool
 #    hostname
 #    iostat
+#    ip
 #    lsblk
 #    lsof
 #    lspci
@@ -25,6 +26,7 @@
 #    sar
 #    slabtop
 #    sysctl
+#    timeout
 #    uname
 #    uptime
 #
@@ -143,14 +145,16 @@ list_cassandra_nodes() {
       translate_ipaddresses_to_k8s_pod_names
     fi
   fi
+  ip_command="ip -4 a"
+  command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
   for ip in ${cassandraNodes} ; do
-    ip -4 a | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
+    ${ip_command} | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
   done
 
   # more accurate disk space check
   node_count="${#cassandraNodes[@]}"
   required_basedir_space="$((${node_count} * 500000))"
-  [ $(df --output=avail "$baseDir"  | grep -v Avail) -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+  [ $(df "$baseDir" | grep -v Filesystem | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
   # also grab the cluster name
   cmd="nodetool $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
@@ -241,12 +245,14 @@ bastion_checks() {
     exit 2
   fi
   command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
+  command -v ip >/dev/null 2>&1 || command -v ifconfig >/dev/null 2>&1 || { echo >&2 "ip or ifconfig needs to be installed"; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do `brew install coreutils`)"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
   ! [ "$use_docker" = "true" ] || command -v docker >/dev/null 2>&1 || { echo >&2 "docker needs to be installed"; exit 1; }
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
-  [ $(df --output=avail "$baseDir"  | grep -v Avail) -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ $(df "$baseDir" | grep -v Filesystem | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "$prometheus" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${prometheus/jar/txt}" | xxd -r -p > "$prometheus" ); }
 }
@@ -286,15 +292,22 @@ bucket_dump() {
     encrypt_artifact "${artifact}"
     if [ "$skipS3" != "true" ]; then
       s3_push_artifact "${baseDir}/${artifact}" "${timestamp}"
-      if [ "$statusState" = "0" ] && [ "$keepArtifact" != "true" ]; then
-        rm ${baseDir}/${artifact}
+      if [ "$statusState" = "0" ]; then
+        if [ "$keepArtifact" != "true" ]; then
+          rm ${baseDir}/${artifact}
+        fi
+      else
+        echo "upload of ${artifact} failed"
+        exit 1
       fi
     fi
   done
 
   if [ "$skipS3" != "true" ]; then
     s3_push_complete_marker "${timestamp}"
-    echo "Pushed to S3 with timeID $timestamp"
+    statusState=$?
+    print_status_state
+    [[ 0 == $statusState ]] || exit $statusState
   fi
   return $statusState
 }
@@ -333,7 +346,6 @@ encrypt_artifact() {
   baseMessage="encrypting artifact $1"
   artifact=$(echo "${artifact}" | awk -F\/ '{print $NF}')
   if [ "$encrypt_uploads" != "false" ]; then
-    echo "Encrypting"
     secretKeyFileName="${issueId}_secret.key"
     # encrypt and use that
     if [ ! -f "${secretKeyFileName}" ]; then
@@ -342,6 +354,12 @@ encrypt_artifact() {
     fi
     SECRET=$(cat "${secretKeyFileName}")
     openssl enc -aes-256-cbc -salt -in "$1" -out "$1.enc" -pass pass:"${SECRET}"
+    statusState=$?
+    print_status_state
+    [[ 0 == $statusState ]] || exit $statusState
+    if [ "$keepArtifact" != "true" ]; then
+      rm "$1"
+    fi
   else
     echo "WARNING: Not using encryption"
   fi
@@ -367,6 +385,7 @@ s3_push_artifact() {
 }
 
 s3_push_complete_marker() {
+  baseMessage="uploading complete marker to s3"
   artifact_count="${#artifacts[@]}"
   node_count="${#cassandraNodes[@]}"
   if [ "$artifact_count" == "$node_count" ]; then
@@ -843,10 +862,15 @@ get_info() {
     else
       node_connect "$baseDir/$targetFile ${collectionArgs[*]}"
     fi
-    latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile'')
+    latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile' 2>&1')
+    if echo "${latestArtifacts}" | grep -q "No such file or directory" ; then
+        echo collection from $hostName failed to generate any artifacts
+        exit 1
+    fi
     latestArtifacts=$(echo $latestArtifacts|awk '{print $1}' | tr -d "\n\r")
-    echo "collecting artifact from $hostName ${latestArtifacts}"
-    ifconf=$(ip -4 a)
+    ip_command="ip -4 a"
+    command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
+    ifconf=$(${ip_command})
     if [[ $ifconf == *"$hostName"* ]];
     then
       echo "Not pulling artifacts for localhost"

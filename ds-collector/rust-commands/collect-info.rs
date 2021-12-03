@@ -60,6 +60,7 @@ fn main() {
         nodetool_host:  &env::var("nodetoolHost").unwrap_or("".to_string()),
         nodetool_credentials: &env::var("nodetoolCredentials").unwrap_or("".to_string()),
         cqlsh_host:  &env::var("cqlsh_host").unwrap_or("localhost".to_string()),
+        cqlsh_port:  &env::var("cqlsh_port").unwrap_or("9042".to_string()),
         cqlsh_opts: &env::var("cqlshOpts").unwrap_or("".to_string()),
         cqlsh_password: &env::var("cqlshPassword").unwrap_or("".to_string()),
         timeout_opts: &env::var("timeout_opts").unwrap_or("".to_string()),
@@ -210,6 +211,7 @@ fn format_args(args: &str, options: &Options, mask: bool) -> String {
         .replace("{nodetool_host}", options.nodetool_host)
         .replace("{nodetool_credentials}", &format_jmx_password(&options.nodetool_credentials, mask))
         .replace("{cqlsh_host}", options.cqlsh_host)
+        .replace("{cqlsh_port}", options.cqlsh_port)
         .replace("{cqlsh_opts}", &format_cqlsh_opts(&options.cqlsh_opts, options.cqlsh_password, mask))
         .replace("{dt_opts}", options.dt_opts)
         .replace("{solr_data_dir}", options.solr_data_dir)
@@ -278,6 +280,7 @@ struct Options<'a> {
     nodetool_host: &'a str,
     nodetool_credentials: &'a str,
     cqlsh_host: &'a str,
+    cqlsh_port: &'a str,
     cqlsh_opts: &'a str,
     cqlsh_password: &'a str,
     timeout_opts: &'a str,
@@ -301,7 +304,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     // cqlsh "$(hostname)" $cqlshOpts -e 'DESCRIBE SCHEMA;' > "$artifactDir/schema.cql"
     Cmd {
         command: "cqlsh",
-        args: "{cqlsh_host} {cqlsh_opts} -f {artifact_dir}/execute_schema.cql",
+        args: "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -f {artifact_dir}/execute_schema.cql",
         file: "schema.cql",
         optional: false,
         skip_flags: "",
@@ -312,7 +315,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     // cqlsh "$(hostname)" $cqlshOpts -e 'DESCRIBE CLUSTER;' > "$artifactDir/metadata.cql"
     Cmd {
         command: "cqlsh",
-        args: "{cqlsh_host} {cqlsh_opts} -f {artifact_dir}/execute_metadata.cql",
+        args: "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -f {artifact_dir}/execute_metadata.cql",
         file: "driver/metadata.txt",
         optional: true,
         skip_flags: "",

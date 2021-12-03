@@ -409,6 +409,7 @@ collect_via_rust() {
   export nodetoolHost
   export nodetoolCredentials
   export cqlsh_host="${cqlsh_host:-$(hostname)}"
+  export cqlsh_port="${cqlsh_port:-9042}"
   export cqlshOpts
   export cqlshPassword
   export timeout_opts="$FOREGROUND_OPT $TIMEOUT_OPT"
@@ -620,8 +621,8 @@ collect_dse_solr_cores() {
             echo "collecting data for DSE Search core $core"
             mkdir -p "$artifactDir/solr/$core/"
             # it's faster to execute cqlsh than dsetool, but it's internal info
-            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/solrconfig.xml" 2>&1
-            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/schema.xml" 2>&1
+            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlsh_port} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='solrconfig.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/solrconfig.xml" 2>&1
+            $timeout_command $dse_bin_dir/cqlsh ${cqlsh_host} ${cqlsh_port} ${cqlshOpts} -e "select blobAsText(resource_value) from solr_admin.solr_resources where core_name = '$core' and resource_name ='schema.xml.bak' ;"  "$CONN_ADDR" "$CONN_PORT"|grep '<?xml version='|sed -e 's|^ *\(<?xml version=.*\)$|\1|'|sed -e "s|\\\n|\n|g" > "$artifactDir/solr/$core/schema.xml" 2>&1
             $timeout_command $dse_bin_dir/dsetool $dt_opts list_core_properties "$core" > "$artifactDir/solr/$core/properties" 2>&1
             $timeout_command $dse_bin_dir/dsetool $dt_opts core_indexing_status "$core" > "$artifactDir/solr/$core/status" 2>&1
             $timeout_command $dse_bin_dir/dsetool $dt_opts list_index_files "$core" > "$artifactDir/solr/$core/index_files" 2>&1

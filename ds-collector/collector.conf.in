@@ -136,10 +136,13 @@
 #$cqlshSSL="false"
 
 # cqlsh host, defaults to $(hostname)
-#cqlsh_host= 
+#cqlsh_host=
 
-# cqlsh port and any other arguments. The default cql (native protocol) port is 9042
-#cqlshOpts="9123 --debug"
+# cqlsh port, defaults to 9042
+cqlsh_port=9042
+
+# other cqlsh arguments
+#cqlshOpts="--debug"
 
 #
 # DSE Options

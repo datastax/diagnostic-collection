@@ -317,12 +317,15 @@ s3_push() {
   contentType="$4"
   stringToSign="PUT\n\n${contentType}\n${s3Date}\n${resource}"
   signature=$(echo -en "${stringToSign}" | openssl sha1 -hmac "${keySecret}" -binary | base64)
-  curl -X PUT -T "${srcFilePath}" \
+  until curl -X PUT -T "${srcFilePath}" \
         -H "Host: ${bucket}.s3.amazonaws.com" \
         -H "Date: ${s3Date}" \
         -H "Content-Type: ${contentType}" \
         -H "Authorization: AWS ${keyId}:${signature}" \
-        https://"${bucket}.s3.amazonaws.com/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}"
+        --retry 9 --retry-connrefused --retry-delay 1 \
+        https://"${bucket}.s3.amazonaws.com/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}" ; do
+    echo "curl … ${srcFilePath} … failed… trying again… "
+  done
 
   statusState=$?
   print_status_state

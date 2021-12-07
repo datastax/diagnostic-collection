@@ -157,3 +157,15 @@ cqlsh_port=9042
 # dsetool_options - options to pass to dsetool
 #dt_opts=""
 
+
+
+# If there are bad nodes that are crashing the ds-collector execution,
+#  and it is desired to complete the collection without them,
+#  add them to the following list, all on one line separated by spaces.
+#
+# This is either ipaddresses, docker container IDs, or k8s containers.
+#
+# Note, unreachable nodes are automatically ignored.
+#skipNodes=""
+
+

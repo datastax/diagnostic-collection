@@ -156,7 +156,7 @@ list_cassandra_nodes() {
   # more accurate disk space check
   node_count="${#cassandraNodes[@]}"
   required_basedir_space="$((${node_count} * 500000))"
-  [ $(df "$baseDir" | grep -v Filesystem | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
   # also grab the cluster name
   cmd="${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
@@ -254,7 +254,7 @@ bastion_checks() {
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
   ! [ "$use_docker" = "true" ] || command -v docker >/dev/null 2>&1 || { echo >&2 "docker needs to be installed"; exit 1; }
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
-  [ $(df "$baseDir" | grep -v Filesystem | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "$prometheus" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${prometheus/jar/txt}" | xxd -r -p > "$prometheus" ); }
 }
@@ -264,7 +264,7 @@ node_checks() {
   [[ -f "$baseDir/$prometheus" ]] || { echo >&2 "$baseDir/$prometheus must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
-  [ $(df "$baseDir" | grep -v Filesystem | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
 }
 
 read_host_name() {

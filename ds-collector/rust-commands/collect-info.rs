@@ -775,6 +775,37 @@ const COMMANDS: &[Cmd<'static>] = &[
         use_sudo: false,
         use_timeout: false,
     },
+    // chronyc
+    Cmd {
+        command: "chronyc",
+        args: "tracking",
+        file: "network/chrony/tracking.txt",
+        optional: true,
+        skip_flags: "",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
+    Cmd {
+        command: "chronyc",
+        args: "sources -v",
+        file: "network/chrony/sources.txt",
+        optional: true,
+        skip_flags: "",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
+    Cmd {
+        command: "chronyc",
+        args: "sourcestats -v",
+        file: "network/chrony/sourcestats.txt",
+        optional: true,
+        skip_flags: "",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
     // ifconfig > $artifactSubDir/ifconfig.txt
     Cmd {
         command: "ifconfig",

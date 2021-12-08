@@ -339,7 +339,9 @@ s3_push() {
         -H "Authorization: AWS ${keyId}:${signature}" \
         --retry 9 --retry-connrefused --retry-delay 1 \
         https://"${bucket}.s3.amazonaws.com/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}" ; do
-    echo "curl … ${srcFilePath} … failed… trying again… "
+    ((c++)) && ((c==10)) && c=0 && break
+    echo "curl … ${srcFilePath} … failed… trying again (${c})… "
+    sleep 1
   done
 
   statusState=$?

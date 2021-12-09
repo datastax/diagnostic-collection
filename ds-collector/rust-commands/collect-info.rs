@@ -1053,7 +1053,7 @@ const COMMANDS: &[Cmd<'static>] = &[
         args: "{data_dir} -maxdepth 3 -name *-Statistics.db -exec cp --parents {} {artifact_dir}/sstable-statistics/ ;",
         file: "",
         optional: true,
-        skip_flags: "",
+        skip_flags: "skip_db_statistics",
         use_stdout: true,
         use_sudo: false,
         use_timeout: false,

@@ -27,6 +27,9 @@ setup:
 	kubectl -n cass-operator apply -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/operator/example-cassdc-yaml/dse-6.8.x/example-cassdc-minimal.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster2-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
 
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> test-collector-k8s-dse.conf
+	@echo "git_sha=$$(git rev-parse HEAD)" >> test-collector-k8s-dse.conf
+
 
 teardown:
 	kubectl delete cassdcs --all-namespaces --all

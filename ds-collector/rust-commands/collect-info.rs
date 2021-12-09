@@ -502,7 +502,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     //  env > os/env.txt
     Cmd {
         command: "env",
-        args: "",
+        args: "-u jmxPassword -u nodetoolCredentials -u cqlshPassword -u cqlsh_opts -u dt_opts",
         file: "os/env.txt",
         optional: true,
         skip_flags: "",

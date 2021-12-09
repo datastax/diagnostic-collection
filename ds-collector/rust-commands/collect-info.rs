@@ -488,6 +488,17 @@ const COMMANDS: &[Cmd<'static>] = &[
         use_sudo: false,
         use_timeout: false,
     },
+    //  free
+    Cmd {
+        command: "free",
+        args: "-m",
+        file: "os/free.txt",
+        optional: true,
+        skip_flags: "",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
     //    vmstat 2 30 > "os/vmstat.txt
     Cmd {
         command: "vmstat",

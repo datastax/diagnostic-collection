@@ -34,6 +34,8 @@ setup:
 	docker exec -t ds-collector-tests_cassandra-02_1 bash -c 'pgrep sshd 2>&1 > /dev/null && echo "SSHd is running" || echo "SSHd is not running"'
 	docker exec -t ds-collector-tests_cassandra-02_1 bash -c 'ps aux | grep cassandra | grep -v grep 2>&1 > /dev/null && echo "Cassandra is running" || echo "Cassandra is not running"'
 
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> test-collector-docker.conf
+	@echo "git_sha=$$(git rev-parse HEAD)" >> test-collector-docker.conf
 
 teardown:
 	docker-compose down

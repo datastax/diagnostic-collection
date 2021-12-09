@@ -240,6 +240,7 @@ node_connect_ssh() {
 }
 
 bastion_checks() {
+  echo "version: ${git_branch} ${git_sha}"
   # pre-conditions
   mkdir -p $baseDir
   if [ "$?" != "0" ]; then
@@ -450,6 +451,7 @@ collect_via_rust() {
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?
   print_status_state
+  echo "completed version ${git_branch} ${git_sha}" >> "${artifactDir}/collect-info.audit.log"
   # exit failure if collect-info fails
   [[ 0 == $statusState ]] || exit $statusState
   return $statusState
@@ -545,7 +547,7 @@ collect_storage() {
 collect_info_setup() {
   update_path
   update_env
-    
+
   cqlshOpts="${cqlshOpts} --username=$cqlshUsername --password=$cqlshPassword"
   if [ "$cqlshSSL" != "false" ]; then
     echo "enabling ssl for cqlsh"

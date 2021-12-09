@@ -27,6 +27,9 @@ setup:
 	kubectl -n cass-operator apply -f https://thelastpickle.com/files/2021-01-31-cass_operator/13-cassandra-cluster-3nodes.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster1-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
 
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> test-collector-k8s.conf
+	@echo "git_sha=$$(git rev-parse HEAD)" >> test-collector-k8s.conf
+
 
 teardown:
 	kubectl delete cassdcs --all-namespaces --all

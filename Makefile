@@ -43,6 +43,8 @@ ifdef is_dse
 	@echo dse
 	@sed -i.bak 's/\#is_dse=.*/is_dse=\"${is_dse}\"/' collector/collector.conf
 endif
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> collector/collector.conf
+	@echo "git_sha=$$(git rev-parse HEAD)" >> collector/collector.conf
 	@rm -rf collector/*.bak
 	@rm -rf collector/.idea
 	@tar cvzf ds-collector.${ISSUE}.tar.gz collector

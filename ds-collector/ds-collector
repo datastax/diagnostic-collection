@@ -450,6 +450,8 @@ collect_via_rust() {
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?
   print_status_state
+  # assertions
+  [ -z ${jmxPassword+x} ] || { echo "not set ${jmxPassword}" ; exit 1 }
   # exit failure if collect-info fails
   [[ 0 == $statusState ]] || exit $statusState
   return $statusState

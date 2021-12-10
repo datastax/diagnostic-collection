@@ -1,0 +1,3 @@
+DataStax Diagnostic Collector
+Copyright (c) 2011-  DataStax
+

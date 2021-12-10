@@ -591,24 +591,29 @@ collect_info_setup() {
 
   # DSE
   if [ "$is_dse" == "true" ]; then
+    
+    [ "/etc/cassandra" = "${configHome}" ] || echo "Overridding configHome (ignoring previous value of ${configHome})"
+    
     # Check DSE package install
     echo "DSE install: Checking install type..."
-    if [ -z "$dse_root_dir" ] && [ -d "/etc/dse" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
+    if [ -z "$dse_root_dir" ] && [ -d "/etc/dse" ] && [ -d "/etc/dse/cassandra" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
         echo "DSE install: package directories successfully found. Proceeding..."
         dse_root_dir="/etc/dse/"
         dse_bin_dir="/usr/bin/"
         dse_conf_dir="/etc/dse/"
+        configHome="/etc/dse/cassandra"
     elif [ -d "$dse_root_dir" ] && [ -d "$dse_root_dir/resources/cassandra/conf" ] && [ -d "$dse_root_dir/resources/dse/conf" ]; then
         echo "DSE install: tarball directories successfully found. Proceeding..."
         dse_bin_dir="$dse_root_dir/bin/"
         dse_conf_dir="$dse_root_dir/resources/dse/conf/"
+        configHome="$dse_root_dir/resources/cassandra/conf"
     else
         echo "DSE install: no package or tarball directories found, or no tarball directory specified."
         exit 1
     fi
-    [[ -d "$dse_bin_dir" ]] || { echo "dse_bin_dir points to a non-existing directory"; exit 1; }
+    [[ -d "$dse_bin_dir" ]] || { echo "dse_bin_dir points to a non-existing directory $dse_bin_dir"; exit 1; }
     [[ -d "$dse_conf_dir" ]] || { echo "dse_conf_dir points to a non-existing directory $dse_conf_dir"; exit 1; }
-    configHome=$dse_conf_dir
+    [[ -d "$configHome" ]] || { echo "configHome points to a non-existing directory $configHome"; exit 1; }
 
     # Versions to determine if nodesync available
     dse_version="$($dse_bin_dir/dse -v)"

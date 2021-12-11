@@ -180,8 +180,8 @@ function get_node_ip {
         fi
         if [ -z "$NODE_ADDR" ]; then
             NODE_ADDR="$(grep -e '^listen_address: ' "$CONF_DIR/cassandra.yaml" |sed -e 's|^[^:]*:[ ]*\([^ ]*\)[ ]*$|\1|'|tr -d "'")"
-            if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ]; then
-                #            echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
+            if [ -z "$NODE_ADDR" ] || [ "$NODE_ADDR" = "127.0.0.1" ] || [ "$NODE_ADDR" = "localhost" ] || [ $(checkIP $NODE_ADDR) = "false" ]; then
+                   echo "Can't detect node's address from cassandra.yaml, or it's set to localhost. Trying to use the 'hostname'"
                 if [ "$HOST_OS" = "Linux" ]; then
                     NODE_ADDR="$(hostname -i)"
                 else
@@ -1066,6 +1066,16 @@ function adjust_nodetool_params {
     fi
 
     JMX_OPTS="$JMX_OPTS -s $jmx_host:$jmx_port"
+}
+
+function checkIP() {
+
+  if [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+
 }
 
 # Call functions in order

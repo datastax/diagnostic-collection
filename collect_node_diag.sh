@@ -780,7 +780,7 @@ function collect_data {
     fi
 
     # Collect metrics from JMX for OSS C* and DDAC
-    if [ -n "$IS_COSS" ] ; then 
+    if [ -n "$IS_COSS" ] ; then
         if [ "$MODE" != "light" ]; then
             $MAYBE_RUN_WITH_TIMEOUT java -jar ~/sjk-plus.jar mxdump $JMX_OPTS > "$DATA_DIR/jmx_dump.json" 2>&1
         fi
@@ -885,7 +885,7 @@ function collect_insights {
                                 if [ -n "$INS_DIR" ] && [ -d "$INS_DIR" ] && [ -d "$INS_DIR/insights" ]; then
 	                            INSIGHTS_DIR="$INS_DIR/insights "
                                 fi
-                                break	    
+                                break
                             fi
                         fi
                 esac
@@ -914,7 +914,7 @@ function collect_insights {
             fi
         fi
     fi
-    
+
     if [ ! -d "$INSIGHTS_DIR" ]; then
         echo "Can't find find directory with insights data, or it doesn't exist! $INSIGHTS_DIR"
         echo "Please pass directory name via -I option (see help)"
@@ -1057,7 +1057,7 @@ function adjust_nodetool_params {
             echo "JMX isn't available at $jmx_host:$jmx_port"
         fi
     fi
-        
+
     if [ "$jmx_port" != "7199" ]; then
         NT_OPTS="$NT_OPTS -p $jmx_port"
     fi

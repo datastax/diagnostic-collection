@@ -307,11 +307,39 @@ bucket_dump() {
     fi
   done
 
+  create_complete_marker
   if [ "$skipS3" != "true" ]; then
     s3_push_complete_marker "${timestamp}"
     statusState=$?
     print_status_state
     [[ 0 == $statusState ]] || exit $statusState
+  fi
+  return $statusState
+}
+
+upload() {
+  timestamp=$(date +"%b-%d-%H-%M")
+  if [[ -d "${uploadMode}" ]] ; then
+    for file in "${uploadMode}"/* ; do
+      if [[ -f "$file" ]]; then
+        if [[ "${file}" == *.enc ]] ; then
+          encrypt_uploads="true"
+        else
+          encrypt_uploads="false"
+        fi
+        s3_push_artifact "${file}" "$timestamp"
+        statusState=$?
+        [[ 0 == $statusState ]] || break
+      fi
+    done
+  else
+    if [[ "${uploadMode}" == *.enc ]] ; then
+      encrypt_uploads="true"
+    else
+      encrypt_uploads="false"
+    fi
+    s3_push_artifact "$uploadMode" "$timestamp"
+    statusState=$?
   fi
   return $statusState
 }
@@ -397,8 +425,7 @@ s3_push_artifact() {
   return ${statusState}
 }
 
-s3_push_complete_marker() {
-  baseMessage="uploading complete marker to s3"
+create_complete_marker() {
   artifact_count="${#artifacts[@]}"
   node_count="${#cassandraNodes[@]}"
   if [ "$artifact_count" == "$node_count" ]; then
@@ -412,6 +439,10 @@ s3_push_complete_marker() {
   for hostName in ${cassandraNodes} ; do
     echo "${hostName} = $(node_connect 'hostname')" >> "${completeFilePath}"
   done
+}
+
+s3_push_complete_marker() {
+  baseMessage="uploading complete marker to s3"
 
   s3_push "${completeFilePath}" "${completeFileName}" "$1" "text/plain"
   if [ "$keepArtifact" != "true" ]; then
@@ -701,7 +732,7 @@ halp() {
                                                   specify path to file with list of nodes or
                                                   ip addresses.
     -f=CONFIG_FILE_PATH     Path to a configuration file. Will override all defaults and options.
-    -a=ARTIFACT_PATH        Path to single artifact to upload to s3.
+    -a=ARTIFACT_PATH        Path to an artifact/directory to upload to s3.
     -p                      Ping the host prior to connecting to it. Can only be used with Test Mode.
     -d                      Run script on a single node only, disabling auto discovery when the -n
                               option specifies a hostname or IP address. Can only be used with
@@ -1001,7 +1032,7 @@ myVariables=(
   issueId
   skipS3
   keepArtifact
-  singleArtifact
+  uploadMode
   cassandraNodes
   dt_opts
   sudo_script_on_node
@@ -1021,7 +1052,7 @@ while getopts f:n:a:hHpdCT-X flag; do
   case $flag in
     f) configFile=$OPTARG ;;
     n) hostName=$OPTARG ;;
-    a) singleArtifact="$OPTARG" ;;
+    a) uploadMode="$OPTARG" ;;
     p) enablePingTest="true" ;;
     T) testMode="true" ;;
     X) executeMode="true" ;;
@@ -1074,15 +1105,9 @@ elif [ $clientMode ]; then
   fi
   collect_info
   exit $?
-elif [ "$singleArtifact" ]; then
+elif [ "$uploadMode" ]; then
   bastion_checks
-  timestamp=$(date +"%b-%d-%H-%M")
-  if [[ "${singleArtifact}" == *.enc ]] ; then
-    encrypt_uploads="true"
-  else
-    encrypt_uploads="false"
-  fi
-  s3_push_artifact "$singleArtifact" "$timestamp"
+  upload
   exit $?
 fi
 

@@ -326,6 +326,11 @@ bucket_dump() {
 #  4 - contentType: MIME type the assign the file in the S3 bucket.
 #
 s3_push() {
+
+  # '--retry-connrefused' is not available on older curl versions (versions older than 2016)
+  CURL_RETRY_OPTS="--retry 9 --retry-delay 1" # these options were added in 7.12.3 (2004)
+  ( curl --help | grep -q "retry-connrefused" ) && CURL_RETRY_OPTS="${CURL_RETRY_OPTS} --retry-connrefused"
+
   srcFilePath="$1"
   dstFileName="$2"
   s3Date="$(LC_ALL=C date -u +"%a, %d %b %Y %X %z")"
@@ -334,12 +339,11 @@ s3_push() {
   contentType="$4"
   stringToSign="PUT\n\n${contentType}\n${s3Date}\n${resource}"
   signature=$(echo -en "${stringToSign}" | openssl sha1 -hmac "${keySecret}" -binary | base64)
-  until curl -X PUT -T "${srcFilePath}" \
+  until curl ${CURL_RETRY_OPTS} -X PUT -T "${srcFilePath}" \
         -H "Host: ${bucket}.s3.amazonaws.com" \
         -H "Date: ${s3Date}" \
         -H "Content-Type: ${contentType}" \
         -H "Authorization: AWS ${keyId}:${signature}" \
-        --retry 9 --retry-connrefused --retry-delay 1 \
         https://"${bucket}.s3.amazonaws.com/${issueId%-*}/${issueId}-${clusterName}-${timestamp}/${dstFileName}" ; do
     ((c++)) && ((c==10)) && c=0 && break
     echo "curl … ${srcFilePath} … failed… trying again (${c})… "

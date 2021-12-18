@@ -1210,7 +1210,7 @@ const COMMANDS: &[Cmd<'static>] = &[
         args: "-s -- {solr_data_dir}/",
         file: "solr/cores-sizes.txt",
         optional: true,
-        skip_flags: "skip_dse",
+        skip_flags: "skip_dse skip_dse_solr",
         use_stdout: true,
         use_sudo: false,
         use_timeout: true,

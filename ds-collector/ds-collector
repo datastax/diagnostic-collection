@@ -482,6 +482,7 @@ collect_via_rust() {
   export dt_opts
   export no_nodesyncrate
   export solr_data_dir
+  export skip_dse_solr
   if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?
@@ -665,7 +666,12 @@ collect_info_setup() {
         echo "No Solr directory is specified in dse.yaml, detecting from cassandra_data_dir: $cassandra_data_dir"
         solr_data_dir="$(echo "$cassandra_data_dir"|sed -e 's|^\([^,]*\)\(,.*\)?$|\1|')/solr.data"
     fi
-    echo "solr_data_dir is defined as: $solr_data_dir"
+    if [ -d "${solr_data_dir}" ] ; then
+      echo "solr_data_dir is defined as: ${solr_data_dir}"
+    else
+      echo "no solr data found at ${solr_data_dir}"
+      skip_dse_solr=true
+    fi
   else
     skip_dse="true"
   fi

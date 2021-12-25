@@ -837,7 +837,7 @@ const COMMANDS: &[Cmd<'static>] = &[
         skip_flags: "",
         use_stdout: true,
         use_sudo: false,
-        use_timeout: false,
+        use_timeout: true,
     },
     // df -i > $artifactSubDir/df-inode.txt
     Cmd {
@@ -848,7 +848,7 @@ const COMMANDS: &[Cmd<'static>] = &[
         skip_flags: "",
         use_stdout: true,
         use_sudo: false,
-        use_timeout: false,
+        use_timeout: true,
     },
     // iostat -dmx 5 24 > $artifactSubDir/iostat-dmx.txt
     Cmd {

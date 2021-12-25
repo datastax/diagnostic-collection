@@ -1215,4 +1215,25 @@ const COMMANDS: &[Cmd<'static>] = &[
         use_sudo: false,
         use_timeout: true,
     },
+    // collect system traces, if permitted
+    Cmd {
+        command: "cqlsh",
+        args: "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -e 'COPY system_traces.sessions TO {artifact_dir}/system_traces_sessions.csv;''",
+        file: "",
+        optional: true,
+        skip_flags: "skip_tracing_collection",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
+    Cmd {
+        command: "cqlsh",
+        args: "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -e 'COPY system_traces.events TO {artifact_dir}/system_traces_events.csv;''",
+        file: "",
+        optional: true,
+        skip_flags: "skip_tracing_collection",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
 ];

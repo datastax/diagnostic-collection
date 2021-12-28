@@ -133,7 +133,7 @@
 
 # cqlsh SSL encryption
 #
-#$cqlshSSL="false"
+#cqlshSSL="false"
 
 # cqlsh host, defaults to $(hostname)
 #cqlsh_host=

@@ -47,6 +47,7 @@ endif
 	@echo "git_sha=$$(git rev-parse HEAD)" >> collector/collector.conf
 	@rm -rf collector/*.bak
 	@rm -rf collector/.idea
+	@chmod ug+x collector/ds-collector
 	@tar cvzf ds-collector.${ISSUE}.tar.gz collector
 	@rm -rf collector
 	@echo "A collector tarball has been generated as ds-collector.${ISSUE}.tar.gz"

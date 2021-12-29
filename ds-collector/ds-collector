@@ -249,7 +249,7 @@ bastion_checks() {
   fi
   command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
   command -v ip >/dev/null 2>&1 || command -v ifconfig >/dev/null 2>&1 || { echo >&2 "ip or ifconfig needs to be installed"; exit 1; }
-  command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do `brew install coreutils`)"; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do 'brew install coreutils')"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
@@ -257,12 +257,14 @@ bastion_checks() {
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
   [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
-  [[ -f "$prometheus" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${prometheus/jar/txt}" | xxd -r -p > "$prometheus" ); }
+  [[ -f "${script_directory}/${prometheus/jar/txt}" ]] || [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${prometheus/jar/txt} or ${prometheus} needs to be in the collector directory ${script_directory}"; exit 1; }
+  [[ -f "${script_directory}/${prometheus}" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${script_directory}/${prometheus/jar/txt}" | xxd -r -p > "${script_directory}/${prometheus}" ); }
+  [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${script_directory}/${prometheus} needs to be in the collector directory ${script_directory}/"; exit 1; }
 }
 
 node_checks() {
   command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed"; exit 1; }
-  [[ -f "$baseDir/$prometheus" ]] || { echo >&2 "$baseDir/$prometheus must exist"; exit 1; }
+  [[ -f "$baseDir/${prometheus}" ]] || { echo >&2 "$baseDir/${prometheus} must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
   [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
@@ -905,9 +907,9 @@ get_info() {
   if [ "$?" = "0" ]; then
     node_push "$0" "$baseDir/$targetFile"
 
-    node_push "$script_directory/$prometheus" "$baseDir/$prometheus"
-    node_push "$script_directory/$dstat" "$baseDir/$dstat"
-    node_push "$script_directory/collect-info" "$baseDir/collect-info"
+    node_push "${script_directory}/${prometheus}" "$baseDir/${prometheus}"
+    node_push "${script_directory}/$dstat" "$baseDir/$dstat"
+    node_push "${script_directory}/collect-info" "$baseDir/collect-info"
 
     if [ "$copyConfig" ]; then
       node_push "$configPath" "$baseDir/$(basename $configFile)"

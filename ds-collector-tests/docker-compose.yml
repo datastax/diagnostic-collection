@@ -68,5 +68,5 @@ services:
         dockerfile: integration-bastion.docker
     image: ds-collector:integration-bastion
     volumes:
-      - ../ds-collector:/ds-collector
+      - ./collector:/collector
       - ../ds-collector-tests:/ds-collector-tests

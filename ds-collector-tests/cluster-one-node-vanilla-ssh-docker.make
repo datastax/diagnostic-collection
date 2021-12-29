@@ -25,20 +25,15 @@ setup:
 	rm collector/collector.conf
 	cp TEST*_secret.key collector/ || true
 	test -f collector/collect-info
-	# setup docker cluster and bastion
-	docker-compose up --build -d
+	# setup single node docker cluster and bastion
+	docker-compose up --build -d cassandra-00 bastion
 	docker-compose ps
-	while (! docker-compose ps | grep -q "ds-collector-tests_cassandra-02_1") || docker-compose ps | grep -q "Up (health: starting)" || docker-compose ps | grep -q "Exit" ; do docker-compose ps ; echo "waiting 60s…" ; sleep 60 ; done
+	while (! docker-compose ps | grep -q "ds-collector-tests_cassandra-00_1") || docker-compose ps | grep -q "Up (health: starting)" || docker-compose ps | grep -q "Exit" ; do docker-compose ps ; echo "waiting 60s…" ; sleep 60 ; done
 
 	# verify sshd and open CQL ports
 	docker exec -t ds-collector-tests_cassandra-00_1 bash -c 'pgrep sshd 2>&1 > /dev/null && echo "SSHd is running" || echo "SSHd is not running"'
 	docker exec -t ds-collector-tests_cassandra-00_1 bash -c 'ps aux | grep cassandra | grep -v grep 2>&1 > /dev/null && echo "Cassandra is running" || echo "Cassandra is not running"'
 
-	docker exec -t ds-collector-tests_cassandra-01_1 bash -c 'pgrep sshd 2>&1 > /dev/null && echo "SSHd is running" || echo "SSHd is not running"'
-	docker exec -t ds-collector-tests_cassandra-01_1 bash -c 'ps aux | grep cassandra | grep -v grep 2>&1 > /dev/null && echo "Cassandra is running" || echo "Cassandra is not running"'
-
-	docker exec -t ds-collector-tests_cassandra-02_1 bash -c 'pgrep sshd 2>&1 > /dev/null && echo "SSHd is running" || echo "SSHd is not running"'
-	docker exec -t ds-collector-tests_cassandra-02_1 bash -c 'ps aux | grep cassandra | grep -v grep 2>&1 > /dev/null && echo "Cassandra is running" || echo "Cassandra is not running"'
 
 teardown:
 	docker-compose down

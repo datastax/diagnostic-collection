@@ -11,7 +11,7 @@ collector: check-env generate-key
 	@mv collector/collector.conf.in collector/collector.conf
 	@od -An -vtx1 collector/collector-0.11.1-SNAPSHOT.jar > collector/collector-0.11.1-SNAPSHOT.txt
 	@rm collector/collector-0.11.1-SNAPSHOT.jar
-	@sed -i.bak 's/\#issueId=.*/issueId=\"${ISSUE}\"/' collector/collector.conf
+	@sed -i.bak 's/\#issueId=.*/issueId=\"$(subst /,-,$(ISSUE))\"/' collector/collector.conf
 	@sed -i.bak 's/\#skipS3/skipS3/' collector/collector.conf
 ifdef COLLECTOR_S3_AWS_KEY
 ifdef COLLECTOR_S3_AWS_SECRET
@@ -48,9 +48,9 @@ endif
 	@rm -rf collector/*.bak
 	@rm -rf collector/.idea
 	@chmod ug+x collector/ds-collector
-	@tar cvzf ds-collector.${ISSUE}.tar.gz collector
+	@tar cvzf ds-collector.$(subst /,-,$(ISSUE)).tar.gz collector
 	@rm -rf collector
-	@echo "A collector tarball has been generated as ds-collector.${ISSUE}.tar.gz"
+	@echo "A collector tarball has been generated as ds-collector.$(subst /,-,$(ISSUE)).tar.gz"
 
 check-env:
 ifndef ISSUE
@@ -88,17 +88,17 @@ ifdef COLLECTOR_SECRETSMANAGER_KEY
 ifdef COLLECTOR_SECRETSMANAGER_SECRET
 	@(command -v aws >/dev/null 2>&1) || { echo >&2 "aws needs to be installed"; exit 1; }
 	@(command -v openssl >/dev/null 2>&1) || { echo >&2 "openssl needs to be installed"; exit 1; }
-	$(eval KEY_FILE_NAME := $(shell echo $${ISSUE}_secret.key))
+	$(eval KEY_FILE_NAME := $(shell echo $(subst /,-,$(ISSUE))_secret.key))
 	$(eval SECRET_EXISTS := $(shell AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager list-secrets | grep ${KEY_FILE_NAME} | grep Name))
 	@if [ -z "${SECRET_EXISTS}" ]; then \
-		echo "Since the secret does not exist for ${ISSUE}, will generate a new one" ; \
+		echo "Since the secret does not exist for $(subst /,-,$(ISSUE)), will generate a new one" ; \
 		openssl rand -base64 256 > ${KEY_FILE_NAME} ; \
 		echo "An encryption key has been generated as ${KEY_FILE_NAME}" ; \
 		echo "I will now add the key to the Secrets Manager" ; \
 		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
 	else \
 		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS}" ; \
-		echo "Issue ${ISSUE} already already exists. Not creating a new secret." ; \
+		echo "Issue $(subst /,-,$(ISSUE)) already already exists. Not creating a new secret." ; \
 	fi
 endif
 endif

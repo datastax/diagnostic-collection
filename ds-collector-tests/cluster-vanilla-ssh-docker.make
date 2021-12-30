@@ -9,6 +9,12 @@ test:
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -X -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
 	# test archives exist
 	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
+	# ds-collector over SSH with verbose mode
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -p -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -X -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
+	# test archives exist
+	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
 	# ds-collector over docker
 	./collector/ds-collector -T -f test-collector-docker.conf -n ds-collector-tests_cassandra-00_1
 	./collector/ds-collector -T -p -f test-collector-docker.conf -n ds-collector-tests_cassandra-00_1

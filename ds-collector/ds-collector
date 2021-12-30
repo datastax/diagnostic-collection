@@ -35,9 +35,8 @@
 #
 
 
-#set -x
-#trap read debug
-#
+set -o pipefail
+
 
 update_path() {
   if [[ -n $prependPath ]] ; then
@@ -56,7 +55,6 @@ update_env() {
 
 one_ping_only() {
   baseMessage="ping test to $1"
-  #echo -e \\n"starting $baseMessage"
   ping -c 1 "$1" > /dev/null 2>&1
   statusState=$?
   print_status_state
@@ -69,7 +67,7 @@ connection_test() {
   echo -e \\n"starting $baseMessage"
   node_connect 'date'
   print_status_state
-  }
+}
 
 connection_tests() {
   # redirect to an unsued file descriptor
@@ -87,7 +85,7 @@ connection_tests() {
     # then get the list of nodes in the cluster and test the connection to those nodes.
     connection_test
     connection_test_result="$?"
-    if [ "${connection_test_result}" -eq 0 ] && [[ ${runOnSingleNode} != "true" ]]
+    if [ "${connection_test_result}" = "0" ] && [[ ${runOnSingleNode} != "true" ]]
     then
       list_cassandra_nodes
       for host in ${cassandraNodes}
@@ -105,6 +103,7 @@ connection_tests() {
 
 # shellcheck disable=SC2086
 list_cassandra_nodes() {
+  statusState=0
   # change this if there's an alias, or a full path needs to be specified
   nodetoolCmd="nodetool"
   # Check if adding password to nodetool is needed:
@@ -125,47 +124,49 @@ list_cassandra_nodes() {
 
   nodetoolHost=''
   $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
-  if [ $? == 0 ]; then
+  if [ $? = 0 ]; then
     nodetoolHost='-h localhost'
     echo "Using localhost to connect to JMX..."
   else
     $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
-    if [ $? == 0 ]; then
+    if [ $? = 0 ]; then
       nodetoolHost="-h $(hostname)"
       echo "Using $(hostname) to connect to JMX..."
     fi
   fi
-
-  cmd="${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
+  cmd="set -o pipefail ; ${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
   cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
   statusState=$?
-  if [ $statusState == 0 ]; then
+  if [ "$statusState" = "0" ]; then
     # ipaddresses need to be translated to docker container IDs
     if [ "$use_docker" = "true" ]; then
       translate_ipaddresses_to_docker_container_ids
     elif [ "$use_k8s" = "true" ]; then
       translate_ipaddresses_to_k8s_pod_names
     fi
-  fi
-  ip_command="ip -4 a"
-  command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
-  for ip in ${cassandraNodes} ; do
-    ${ip_command} | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
-  done
+    ip_command="ip -4 a"
+    command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
+    for ip in ${cassandraNodes} ; do
+      ${ip_command} | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
+    done
 
-  # more accurate disk space check
-  node_count="${#cassandraNodes[@]}"
-  required_basedir_space="$((${node_count} * 500000))"
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+    # more accurate disk space check
+    node_count="${#cassandraNodes[@]}"
+    required_basedir_space="$((${node_count} * 500000))"
+    [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
-  # also grab the cluster name
-  cmd="${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
-  clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
-  if [ $? == 0 ]; then
-    export clusterName
-    echo "Cluster name identified as ${clusterName}"
+    # also grab the cluster name
+    cmd="set -o pipefail ; ${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
+    clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
+    if [ $? = 0 ]; then
+      export clusterName
+      echo "Cluster name identified as ${clusterName}"
+    else
+      export clusterName=""
+    fi
   else
-    export clusterName=""
+    echo "running command ${cmd} on ${hostName} NOTOK RC=${statusState}"
+    echo "Is Cassandra/DSE running on ${hostName} ?"
   fi
   return $statusState
 }
@@ -429,7 +430,7 @@ s3_push_artifact() {
 
 create_complete_marker() {
   artifact_count="${#artifacts[@]}"
-  node_count="${#cassandraNodes[@]}"
+  node_count="$(echo $cassandraNodes | wc -w)"
   if [ "$artifact_count" == "$node_count" ]; then
     completeFileName="collector_upload.complete"
   else
@@ -745,6 +746,7 @@ halp() {
     -d                      Run script on a single node only, disabling auto discovery when the -n
                               option specifies a hostname or IP address. Can only be used with
                               Test Mode and Execute Mode.
+    -v                      Verbose mode. Also captures console stdout to a log file under ${baseDir}
     -h                      Print this help and exit.
 
     modes:
@@ -952,7 +954,6 @@ get_info() {
 ####### main
 script_directory=$(dirname "$0")
 date=$(date +'%Y_%m_%d_%H%M_%s')
-#logFile="$0.$date"
 baseDir="/tmp/datastax"
 artifactDir="$baseDir/$(hostname)_artifacts_$date"
 artifactFile="latest_artifacts.txt"
@@ -990,13 +991,6 @@ k8s_namespace="default"
 
 # JMX port
 jmxPort="7199"
-
-# reserved
-#logger="false"
-#set -x
-#trap read debug
-#export -f node_connect
-#typeset -fx node_connect
 
 # s3
 bucket="collector-dead-drop"
@@ -1056,7 +1050,7 @@ addPath="/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:/sbin"
 defaultUserName="root"
 collectionArgs=(-C)
 
-while getopts f:n:a:hHpdCT-X flag; do
+while getopts f:n:a:hHpdvxCT-X flag; do
   case $flag in
     f) configFile=$OPTARG ;;
     n) hostName=$OPTARG ;;
@@ -1066,6 +1060,8 @@ while getopts f:n:a:hHpdCT-X flag; do
     X) executeMode="true" ;;
     C) clientMode="true" ;;
     d) runOnSingleNode="true" ;;
+    v) verbose="true" ;;
+    x) debug="true" ;;
     h) halp; exit 4 ;;
     H) halp; exit 4 ;;
     \?) echo -e \\n"unknown option $OPTARG...sorry"\\n; halp; exit 2 ;;
@@ -1096,7 +1092,17 @@ then
   jmxPassword=$(escape_special_chars "$jmxPassword")
 fi
 
-if [ $testMode ]; then
+
+if [ $debug ] ; then
+  set -x
+fi
+if [ $verbose ] ; then
+  bastion_checks
+  logFile="${baseDir}/ds-collector-$(date +'%Y-%m-%d-%H-%M-%s').log"
+  echo "debugging to ${logFile}"
+  ( exec $0 ${@/-v/-x} )  2>&1  | sed "s/${jmxPassword:-'\*\*\*\*'}/****/g" | sed "s/${cqlshPassword:-'\*\*\*\*'}/****/g" | tee "${logFile}"
+  exit $?
+elif [ $testMode ]; then
   bastion_checks
   connection_tests
   exit $?
@@ -1119,5 +1125,5 @@ elif [ "$uploadMode" ]; then
   exit $?
 fi
 
-echo -e  \\n"exiting...mode required!"; halp
-exit $?
+echo -e  \\n"exiting...mode required!"; halp; exit 2
+

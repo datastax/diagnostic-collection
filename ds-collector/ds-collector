@@ -71,6 +71,7 @@ connection_test() {
   print_status_state
   }
 
+# shellcheck disable=SC2162
 connection_tests() {
   # redirect to an unsued file descriptor
   # as secure shell reads from standard input
@@ -103,7 +104,7 @@ connection_tests() {
   fi
 }
 
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086,SC2154
 list_cassandra_nodes() {
   # change this if there's an alias, or a full path needs to be specified
   nodetoolCmd="nodetool"
@@ -124,13 +125,11 @@ list_cassandra_nodes() {
   timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
 
   nodetoolHost=''
-  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
-  if [ $? == 0 ]; then
+  if $timeout_command nc -zv localhost "$jmxPort" > /dev/null 2>&1 ; then
     nodetoolHost='-h localhost'
     echo "Using localhost to connect to JMX..."
   else
-    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
-    if [ $? == 0 ]; then
+    if $timeout_command nc -zv "$(hostname)" "$jmxPort" > /dev/null 2>&1 ; then
       nodetoolHost="-h $(hostname)"
       echo "Using $(hostname) to connect to JMX..."
     fi
@@ -155,8 +154,8 @@ list_cassandra_nodes() {
 
   # more accurate disk space check
   node_count="${#cassandraNodes[@]}"
-  required_basedir_space="$((${node_count} * 500000))"
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+  required_basedir_space="$((node_count * 500000))"
+  [ "$(df "$baseDir" | tail -n +2 | awk '{print $4}')" -ge "${required_basedir_space}" ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((required_basedir_space / 1000000))GB free at $baseDir"; exit 1; }
 
   # also grab the cluster name
   cmd="${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
@@ -214,8 +213,9 @@ node_connect() {
   return $statusState
 }
 
+# shellcheck disable=SC2154
 node_connect_docker() {
-  docker exec $docker_exec_args $hostName /bin/bash -c "$1"
+  docker exec $docker_exec_args "$hostName" /bin/bash -c "$1"
   # option to direct standard out and error to a log file and screen
   statusState=$?
   return $statusState
@@ -239,23 +239,23 @@ node_connect_ssh() {
   return $statusState
 }
 
+# shellcheck disable=SC2154
 bastion_checks() {
   echo "version: ${git_branch} ${git_sha}"
   # pre-conditions
-  mkdir -p $baseDir
-  if [ "$?" != "0" ]; then
+  if ! mkdir -p "$baseDir" ; then
     echo "we couldn't make our working directory: $baseDir...exiting"
     exit 2
   fi
   command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
   command -v ip >/dev/null 2>&1 || command -v ifconfig >/dev/null 2>&1 || { echo >&2 "ip or ifconfig needs to be installed"; exit 1; }
-  command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do `brew install coreutils`)"; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do 'brew install coreutils')"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
-  [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
+  [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || [ -z "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
   ! [ "$use_docker" = "true" ] || command -v docker >/dev/null 2>&1 || { echo >&2 "docker needs to be installed"; exit 1; }
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ "$(df "$baseDir" | tail -n +2 | awk '{print $4}')" -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "$prometheus" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${prometheus/jar/txt}" | xxd -r -p > "$prometheus" ); }
 }
@@ -265,9 +265,10 @@ node_checks() {
   [[ -f "$baseDir/$prometheus" ]] || { echo >&2 "$baseDir/$prometheus must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ "$(df "$baseDir" | tail -n +2 | awk '{print $4}')" -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
 }
 
+# shellcheck disable=SC2162
 read_host_name() {
   if [ -z "$hostName" ]; then
     echo -e "please enter a hostname or ip (or docker container id) and press [RETURN]: \c"
@@ -283,10 +284,10 @@ print_status_state() {
   fi
 }
 
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086,SC2154
 bucket_dump() {
   unset -v artifacts
-  artifacts=($baseDir/*artifacts*.tar.gz)
+  artifacts=("$baseDir"/*artifacts*.tar.gz)
 
   timestamp=$(date +"%b-%d-%H-%M")
 
@@ -312,7 +313,7 @@ bucket_dump() {
     s3_push_complete_marker "${timestamp}"
     statusState=$?
     print_status_state
-    [[ 0 == $statusState ]] || exit $statusState
+    [[ 0 == "$statusState" ]] || exit $statusState
   fi
   return $statusState
 }
@@ -353,6 +354,7 @@ upload() {
 #  3 - timestamp:   Timestamp calculated for the execution of the collector.
 #  4 - contentType: MIME type the assign the file in the S3 bucket.
 #
+# shellcheck disable=SC2154
 s3_push() {
 
   # '--retry-connrefused' is not available on older curl versions (versions older than 2016)
@@ -397,7 +399,7 @@ encrypt_artifact() {
     openssl enc -aes-256-cbc -salt -in "$1" -out "$1.enc" -pass pass:"${SECRET}"
     statusState=$?
     print_status_state
-    [[ 0 == $statusState ]] || exit $statusState
+    [[ 0 == "$statusState" ]] || exit $statusState
     if [ "$keepArtifact" != "true" ]; then
       rm "$1"
     fi
@@ -419,7 +421,6 @@ s3_push_artifact() {
     artifactPath="$1"
     mimeType="application/x-gzip"
   fi
-  # shellcheck disable=SC1001
   echo "Uploading to s3 artifact: ${artifact}"
   s3_push "${artifactPath}" "${artifact}" "$2" "${mimeType}"
   return ${statusState}
@@ -446,7 +447,7 @@ s3_push_complete_marker() {
 
   s3_push "${completeFilePath}" "${completeFileName}" "$1" "text/plain"
   if [ "$keepArtifact" != "true" ]; then
-    rm -f ${completeFilePath}
+    rm -f "${completeFilePath}"
   fi
 
   return ${statusState}
@@ -454,7 +455,7 @@ s3_push_complete_marker() {
 
 sub_dir() {
   artifactSubDir="$artifactDir/$1"
-  mkdir -p $artifactSubDir
+  mkdir -p "$artifactSubDir"
 }
 
 # shellcheck disable=SC2086
@@ -489,7 +490,7 @@ collect_via_rust() {
   print_status_state
   echo "completed version ${git_branch} ${git_sha}" >> "${artifactDir}/collect-info.audit.log"
   # exit failure if collect-info fails
-  [[ 0 == $statusState ]] || exit $statusState
+  [[ 0 == "$statusState" ]] || exit $statusState
   return $statusState
 }
 
@@ -499,16 +500,14 @@ collect_ethernet_device() {
   sub_dir "network"
   # legacy eth network names
   for ethernet_device in eth{0..9} ;do
-    ip a show $ethernet_device >> /dev/null 2>&1
-    if [ "$?" = "0" ] ; then
-      ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
+    if ip a show "$ethernet_device" >> /dev/null 2>&1 ; then
+      ethtool -i "$ethernet_device" > "${artifactSubDir}/ethtool-${ethernet_device}.txt"
     fi
   done
   # udev en network names
   for ethernet_device in $(ip -4 a | grep ": en" | cut -d":" -f2) ;do
-    ip a show $ethernet_device >> /dev/null 2>&1
-    if [ "$?" = "0" ] ; then
-      ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
+    if ip a show "$ethernet_device" >> /dev/null 2>&1 ; then
+      ethtool -i "$ethernet_device" > "${artifactSubDir}/ethtool-${ethernet_device}.txt"
     fi
   done
   statusState=$?
@@ -572,7 +571,7 @@ collect_storage() {
       if [ -z "$data_mount" ]; then
           data_mount="$dm"
       else
-          data_mount="$DATA_MOUNT,$dm"
+          data_mount="$data_mount,$dm"
       fi
   done
   commitlog_mount=$(df -h "$cassandra_commitlog_dir" | grep -v "Filesystem" | awk '{print $1}')
@@ -580,6 +579,7 @@ collect_storage() {
   echo "commitlog: $commitlog_mount" >> "$artifactDir/os-metrics/disk_device.txt" 2>&1
 }
 
+# shellcheck disable=SC2154
 collect_info_setup() {
   update_path
   update_env
@@ -600,13 +600,12 @@ collect_info_setup() {
 
   # Make our best guess on the host address to use to access nodetool/JMX
   nodetoolHost=''
-  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
-  if [ $? == 0 ]; then
+
+  if $timeout_command nc -zv localhost "$jmxPort" > /dev/null 2>&1 ; then
     nodetoolHost='-h localhost'
     echo "Using localhost to connect to JMX..."
   else
-    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
-    if [ $? == 0 ]; then
+    if $timeout_command nc -zv "$(hostname)" "$jmxPort" > /dev/null 2>&1 ; then
       nodetoolHost="-h $(hostname)"
       echo "Using $(hostname) to connect to JMX..."
     fi
@@ -626,7 +625,7 @@ collect_info_setup() {
   fi
 
   # DSE
-  if [ "$is_dse" == "true" ]; then
+  if [ "$is_dse" = "true" ]; then
     
     [ "/etc/cassandra" = "${configHome}" ] || echo "Overridding configHome (ignoring previous value of ${configHome})"
     
@@ -688,6 +687,7 @@ collect_info() {
   archive_artifacts
 }
 
+# shellcheck disable=SC2086
 collect_dse_solr_cores() {
     echo "Collecting DSE infomation…"
 
@@ -709,7 +709,7 @@ collect_dse_solr_cores() {
 
 archive_artifacts() {
   baseMessage="archiving current artifacts"
-  cd "$baseDir"
+  cd "$baseDir" || { echo "missing ${baseDir}" ; exit 1 ; }
   if [ "$skipSudo" != "true" ]; then
     sudo chown -R "$(whoami)" "$artifactDir"
   fi
@@ -838,7 +838,7 @@ node_pull_docker() {
 }
 
 node_pull_k8s() {
-  kubectl -n "$k8s_namespace" cp "$hostName:$1" "$baseDir/$(basename $1)"
+  kubectl -n "$k8s_namespace" cp "$hostName:$1" "$baseDir/$(basename "$1")"
   statusState=$?
   print_status_state
   return $statusState
@@ -855,7 +855,7 @@ node_pull_ssh() {
   return $statusState
 }
 
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086,SC2162,SC1090
 read_config() {
   baseMessage="read configuration from file"
   # echo -e \\n"starting $baseMessage"
@@ -863,7 +863,7 @@ read_config() {
     source $configPath
     statusState=$?
     copyConfig=true
-    collectionArgs+=(-f $baseDir/$configFile)
+    collectionArgs+=("-f" "${baseDir}/${configFile}")
     # change the $skipNodes string into an array
     IFS=' ' read skipNodes <<< "$skipNodes"
   else
@@ -874,7 +874,7 @@ read_config() {
   if [ "$statusState" != "0" ]; then exit $statusState; fi
 }
 
-# shellcheck disable=SC2086,SC1001
+# shellcheck disable=SC2086,SC1001,SC2162,SC2076
 # Called from the primary machine
 get_infos() {
   if [ $hostFile ]; then
@@ -901,8 +901,7 @@ get_infos() {
 get_info() {
   read_host_name
   baseMessage="transfer of collection script and execute on $hostName"
-  node_connect 'mkdir -p '$baseDir''
-  if [ "$?" = "0" ]; then
+  if node_connect 'mkdir -p '$baseDir'' ; then
     node_push "$0" "$baseDir/$targetFile"
 
     node_push "$script_directory/$prometheus" "$baseDir/$prometheus"
@@ -1017,7 +1016,7 @@ myArrays=(
 
 for myArray in "${myArrays[@]}"
 do
-  unset -v $myArray
+  unset -v "${myArray}"
 done
 
 # initialize variables

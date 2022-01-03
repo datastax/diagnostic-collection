@@ -20,7 +20,7 @@ cd collector
 # if an encryption file has been provided, copy it to this folder
 cp <some-path>/*_secret.key .
 
-# read through the configuration file, ensuring all options are correct
+# go through the configuration file, set all parameters as suited
 edit collector.conf
 
 # test connections to all nodes can be made, replace <CASSANDRA_CONTACT_POINT> with ip of Cassandra node

@@ -23,7 +23,8 @@ cp <some-path>/*_secret.key .
 # read through the configuration file, ensuring all options are correct
 edit collector.conf
 
-# test connections to all nodes can be made, replace <CASSANDRA_CONTACT_POINT> with ip of Cassandra node
+# test connections to all nodes can be made, replace <CASSANDRA_CONTACT_POINT> with the ip of a Cassandra node 
+# one node is enough, the ips of the other nodes will be found automatically.
 ./ds-collector -T -f collector.conf -n <CASSANDRA_CONTACT_NODE>
 
 # collect diagnostics from every node

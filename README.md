@@ -1,4 +1,4 @@
-# DataStax Diagnostic Collector for Apache Cassandra and DSE
+# DataStax Diagnostic Collector for Apache Cassandra&trade; and DataStax Enterprise (DSE) &trade;
 
 A script for collecting a diagnostic snapshot from each node in a Cassandra based cluster.
 

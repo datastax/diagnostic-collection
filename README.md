@@ -97,7 +97,15 @@ In order to encrypt the generated tarball and upload it to S3, specify the neces
 ./collect_diag.sh -t coss -K <aws key> -S <aws secret> -T <ticket id> -e /path/to/enc_secret.key -B <s3 bucket name> -r
 ```
 
+## Collecting from K8ssandra or DSE clusters deployed with the cass-operator
 
+To collect from a k8ssandra datacenter named dc1 deployed in namespace cass-operator
+
+`collect_k8s_diag.sh -n cass-operator -t k8ssandra -d dc1`
+
+To collect from a DSE datacenter named dc1 deployed with the cass-operator in the cass-operator namespace
+
+`collect_k8s_diag.sh -n cass-operator -t dse -d dc1`
 
 ## What is collected
 

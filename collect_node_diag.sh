@@ -23,6 +23,7 @@ function usage() {
     echo "   -i insights - collect only data for DSE Insights"
     echo "   -I insights_dir - directory to find the insights .gz files"
     echo "   -o output_dir - where to put generated files. Default: /var/tmp"
+    echo "   -l log_dir - manually set log directory instead of relying on autodetection"
     echo "   -m collection_mode - light, normal, extended. Default: normal"
     echo "   -v - verbose output"
     echo "   -z - don't execute commands that require sudo"
@@ -76,7 +77,7 @@ TIMEOUT="120"
 # Parse arguments
 # ---------------
 
-while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:C:D:" opt; do
+while getopts ":hzivke:l:c:n:p:f:d:o:t:I:m:P:C:D:" opt; do
     case $opt in
         n) NT_OPTS="$OPTARG"
            ;;
@@ -97,6 +98,8 @@ while getopts ":hzivke:c:n:p:f:d:o:t:I:m:P:C:D:" opt; do
         k) COLLECT_SSL="true"
            ;;
         z) NOSUDO="true"
+           ;;
+        l) LOG_DIR="$OPTARG"
            ;;
         m) MODE="$OPTARG"
            if [ "$MODE" != "normal" ] && [ "$MODE" != "extended" ] && [ "$MODE" != "light" ]; then
@@ -767,10 +770,17 @@ function collect_data {
     if [ -z "$CASS_DSE_LOG_DIR" ]; then
         CASS_DSE_LOG_DIR="$LOG_DIR"
     fi
-    find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log -a -type f -exec cp {} "$DATA_DIR/logs/cassandra/" \;
 
-    if [ "$MODE" = "extended" ]; then
-        find "$CASS_DSE_LOG_DIR" -maxdepth 1 -name \*\.log\.\* -a -type f -exec cp {} "$DATA_DIR/logs/cassandra/" \;
+    for entry in "$CASS_DSE_LOG_DIR"/*.log
+    do
+        cp $entry "$DATA_DIR/logs/cassandra/"
+    done
+
+    if [ "$MODE" == "extended" ]; then
+        for entry in "$CASS_DSE_LOG_DIR"/*.log.*
+        do
+            cp $entry "$DATA_DIR/logs/cassandra/"
+        done
     fi
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         GC_LOG="$(sed -e 's|^.* -Xloggc:\([^ ]*\) .*$|\1|' < "$DATA_DIR/java_cmdline")"
@@ -1033,9 +1043,9 @@ function adjust_nodetool_params {
     local jmx_port=7199
     local jmx_host=127.0.0.1
     local tmp=""
-
+    
     # Get the JMX user/password from the NT_OPTS and put them in a format that sjk will understand
-    JMX_OPTS=echo $NT_OPTS | sed -En "s/-u /--username /p" | sed -En "s/-pw /--password /p"
+    JMX_OPTS=$(echo $NT_OPTS | sed -En "s/-u /--username /p" | sed -En "s/-pw /--password /p")
 
     if [ -f "$DATA_DIR/java_cmdline" ]; then
         tmp=$(grep 'cassandra.jmx.local.port=' "$DATA_DIR/java_cmdline"|sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')

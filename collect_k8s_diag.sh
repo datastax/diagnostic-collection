@@ -67,7 +67,7 @@ function copy_node() {
        echo "**********************"
        echo "moving ./collect_node_diag.sh to $TYPE $NODE_NAME"
        kubectl cp -n $NS -c cassandra ./collect_node_diag.sh $NODE_NAME:/tmp/collect_node_diag.sh
-       kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- /tmp/collect_node_diag.sh -z -t dse -P /opt/dse -c "-u $CASS_USER -p $CASS_PASS"
+       kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- /tmp/collect_node_diag.sh -z -t dse -P /opt/dse -c "-u $CASS_USER -p $CASS_PASS" -v
        echo "capturings logs for $NODE_NAME"
        TAR=$(kubectl exec -n $NS -it $NODE_NAME -c cassandra -- ls -l  /var/tmp/ | grep ".tar.gz" | awk '{print $9}' | tr -d '\r')
        kubectl exec -n $NS $NODE_NAME  -it -c cassandra -- rm /tmp/collect_node_diag.sh

@@ -1,5 +1,5 @@
-DataStax Diagnostic Collector for Apache Cassandra and DSE
-==========================================================
+DataStax Diagnostic Collector for Apache Cassandra&trade; and DataStax Enterprise (DSE)&trade;
+===============================================================================================
 
 The Diagnostic Collector bundle is used to collect diagnostic snapshots over all nodes in an Apache Cassandra or DataStax Enterprise cluster. 
 

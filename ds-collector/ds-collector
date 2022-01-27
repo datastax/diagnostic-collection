@@ -1100,7 +1100,7 @@ if [ $verbose ] ; then
   bastion_checks
   logFile="${baseDir}/ds-collector-$(date +'%Y-%m-%d-%H-%M-%s').log"
   echo "debugging to ${logFile}"
-  ( exec $0 ${@/-v/-x} )  2>&1  | sed "s/${jmxPassword:-'\*\*\*\*'}/****/g" | sed "s/${cqlshPassword:-'\*\*\*\*'}/****/g" | tee "${logFile}"
+  ( exec $0 ${@/-v/-x} )  2>&1  | sed "s/${jmxPassword:-\*\*\*\*}/****/g" | sed "s/${cqlshPassword:-\*\*\*\*}/****/g" | tee "${logFile}"
   exit $?
 elif [ $testMode ]; then
   bastion_checks

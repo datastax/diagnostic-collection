@@ -24,12 +24,12 @@ test:
 	
 
 setup:
-	mkdir -p /tmp/datastax && rm -fr /tmp/datastax/*
+	mkdir -p /tmp/datastax && rm -fr /tmp/datastax/* ../ds-collector.TEST-cluster-one-node-vanilla-ssh-docker-*.tar.gz TEST-cluster-one-node-vanilla-ssh-docker-*_secret.key
 	# make diagnostics bundle
-	cd ../ ; ISSUE="TEST-$$(git rev-parse --abbrev-ref HEAD)--$$(git rev-parse --short HEAD)" make
-	tar -xvf ../ds-collector.TEST-*.tar.gz
+	cd ../ ; ISSUE="TEST-cluster-one-node-vanilla-ssh-docker-$$(git rev-parse --abbrev-ref HEAD)--$$(git rev-parse --short HEAD)" make
+	tar -xvf ../ds-collector.TEST-cluster-one-node-vanilla-ssh-docker-*.tar.gz
 	rm collector/collector.conf
-	cp TEST*_secret.key collector/ || true
+	cp TEST-cluster-one-node-vanilla-ssh-docker-*_secret.key collector/ || true
 	test -f collector/collect-info
 	# setup single node docker cluster and bastion
 	docker-compose up --build -d cassandra-00 bastion

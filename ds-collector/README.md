@@ -186,6 +186,12 @@ cd collector
 ./ds-collector -f collector.conf -a "$(pwd)/../datastax"
 ```
 
+* To run the collector when `xxd` is unavailable on the bastion, manually download the `collector-0.11.1-SNAPSHOT.jar` file to the `collector/` folder.
+```
+cd collector
+wget https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar
+```
+
 * The `nodetool` command is not found in $PATH on the nodes. While the `addPath` and `prependPath` options (see collector.conf) can be used for other commands to be found on the node, the `nodetool` command is used before these variables are applied. To fix this manually update the `nodetoolCmd` variable in the `list_cassandra_nodes` function in the `ds-colllector` script. (See https://github.com/datastax/diagnostic-collection/issues/83 )
 
 * Disabling the s3 upload. The artifacts will be left in the `/tmp/datastax/` folder.

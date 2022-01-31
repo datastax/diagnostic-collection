@@ -15,12 +15,12 @@ test:
 
 
 setup:
-	mkdir -p /tmp/datastax && rm -fr /tmp/datastax/*
+	mkdir -p /tmp/datastax && rm -fr /tmp/datastax/* collector ../ds-collector.TEST-cluster-vanilla-k8s-*.tar.gz TEST-cluster-vanilla-k8s-*_secret.key
 	# make diagnostics bundle
-	cd ../ ; ISSUE="TEST-$$(git rev-parse --abbrev-ref HEAD)--$$(git rev-parse --short HEAD)" make
-	tar -xvf ../ds-collector.TEST-*.tar.gz
+	cd ../ ; ISSUE="TEST-cluster-vanilla-k8s-$$(git rev-parse --abbrev-ref HEAD)--$$(git rev-parse --short HEAD)" make
+	tar -xvf ../ds-collector.TEST-cluster-vanilla-k8s-*.tar.gz
 	rm collector/collector.conf
-	cp TEST*_secret.key collector/ || true
+	cp TEST-cluster-vanilla-k8s-*_secret.key collector/ || true
 	test -f collector/collect-info
 	# setup k8s cluster
 	wget https://thelastpickle.com/files/2021-01-31-cass_operator/01-kind-config.yaml -O /tmp/datastax/01-kind-config.yaml

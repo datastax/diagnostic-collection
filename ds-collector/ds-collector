@@ -122,19 +122,19 @@ list_cassandra_nodes() {
   ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 3"
   timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
 
-  nodetoolHost=''
+  jmxHost='127.0.0.1'
   $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
   if [ $? = 0 ]; then
-    nodetoolHost='-h localhost'
+    jmxHost='localhost'
     echo "Using localhost to connect to JMX..."
   else
     $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
     if [ $? = 0 ]; then
-      nodetoolHost="-h $(hostname)"
+      jmxHost="$(hostname)"
       echo "Using $(hostname) to connect to JMX..."
     fi
   fi
-  cmd="set -o pipefail ; ${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
+  cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
   cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
   statusState=$?
   if [ "$statusState" = "0" ]; then
@@ -156,7 +156,7 @@ list_cassandra_nodes() {
     [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
     # also grab the cluster name
-    cmd="set -o pipefail ; ${nodetoolCmd} $nodetoolHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
+    cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
     clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
     if [ $? = 0 ]; then
       export clusterName
@@ -474,7 +474,7 @@ collect_via_rust() {
   export jmxUsername
   export jmxPassword
   export jmxSSL
-  export nodetoolHost
+  export jmxHost
   export nodetoolCredentials
   export cqlsh_host="${cqlsh_host:-$(hostname)}"
   export cqlsh_port="${cqlsh_port:-9042}"
@@ -602,15 +602,15 @@ collect_info_setup() {
   timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
 
   # Make our best guess on the host address to use to access nodetool/JMX
-  nodetoolHost=''
+  jmxHost='127.0.0.1'
   $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
   if [ $? == 0 ]; then
-    nodetoolHost='-h localhost'
+    jmxHost='localhost'
     echo "Using localhost to connect to JMX..."
   else
     $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
     if [ $? == 0 ]; then
-      nodetoolHost="-h $(hostname)"
+      jmxHost="$(hostname)"
       echo "Using $(hostname) to connect to JMX..."
     fi
   fi

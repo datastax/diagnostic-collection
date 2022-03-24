@@ -153,7 +153,10 @@ list_cassandra_nodes() {
     # more accurate disk space check
     node_count="${#cassandraNodes[@]}"
     required_basedir_space="$((${node_count} * 500000))"
-    [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+    # detect if df supports --portability
+    DF_OPT=""
+    ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
+    [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
     # also grab the cluster name
     cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
@@ -255,7 +258,10 @@ bastion_checks() {
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
   ! [ "$use_docker" = "true" ] || command -v docker >/dev/null 2>&1 || { echo >&2 "docker needs to be installed"; exit 1; }
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  # detect if df supports --portability
+  DF_OPT=""
+  ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
+  [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "${script_directory}/${prometheus}" ]] || command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
   [[ -f "${script_directory}/${prometheus/jar/txt}" ]] || [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${prometheus/jar/txt} or ${prometheus} needs to be in the collector directory ${script_directory}"; exit 1; }
@@ -268,7 +274,10 @@ node_checks() {
   [[ -f "$baseDir/${prometheus}" ]] || { echo >&2 "$baseDir/${prometheus} must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
-  [ $(df "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  # detect if df supports --portability
+  DF_OPT=""
+  ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
+  [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
 }
 
 read_host_name() {
@@ -566,19 +575,22 @@ collect_storage() {
       echo "commitlog: $cassandra_commitlog_dir" >> "$artifactDir/os-metrics/disk_config.txt" 2>&1
       # todo, this can also be done by grepping against `ps -fax` (as jcmd is not available on many servers)
   fi
+  # detect if df supports --portability
+  DF_OPT=""
+  ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
   # Since the data dir might have multiple items we need to check
   # each one using df to verify the physical device
   #for DEVICE in $(cat "$configHome/cassandra.yaml" | sed -n "/^data_file_directories:/,/^$/p" | grep -E "^.*-" | awk '{print $2}')
   for device in $(echo "$cassandra_data_dir" | awk '{gsub(/,/,"\n");print}')
   do
-      dm="$(df -h "$device" | grep -v "Filesystem" | awk '{print $1}')"
+      dm="$(df $DF_OPT -h "$device" | grep -v "Filesystem" | awk '{print $1}')"
       if [ -z "$data_mount" ]; then
           data_mount="$dm"
       else
           data_mount="$DATA_MOUNT,$dm"
       fi
   done
-  commitlog_mount=$(df -h "$cassandra_commitlog_dir" | grep -v "Filesystem" | awk '{print $1}')
+  commitlog_mount=$(df $DF_OPT -h "$cassandra_commitlog_dir" | grep -v "Filesystem" | awk '{print $1}')
   echo "data: $data_mount" > "$artifactDir/os-metrics/disk_device.txt" 2>&1
   echo "commitlog: $commitlog_mount" >> "$artifactDir/os-metrics/disk_device.txt" 2>&1
 }

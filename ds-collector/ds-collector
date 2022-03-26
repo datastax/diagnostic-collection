@@ -486,6 +486,7 @@ collect_via_rust() {
   export no_nodesyncrate
   export solr_data_dir
   export skip_dse_solr
+  if ! [ "$enableTracingCollection" = "true" ] ; then export skip_tracing_collection="true" ; fi
   if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?

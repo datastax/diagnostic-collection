@@ -1,7 +1,7 @@
 FROM cassandra:3.11
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y openssh-server wait-for-it netcat sudo procps ethtool lsof netcat net-tools sysstat pciutils ntp ntpstat numactl lvm2 iproute2
+RUN apt-get update && apt-get install -y openssh-server wait-for-it netcat sudo procps ethtool lsof netcat-traditional net-tools sysstat pciutils ntp ntpstat numactl lvm2 iproute2
 RUN mkdir /var/run/sshd
 RUN echo 'root:root' | chpasswd
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config

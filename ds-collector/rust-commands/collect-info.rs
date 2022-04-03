@@ -244,11 +244,11 @@ fn nodetool_ssl(jmx_ssl: bool) -> String {
     }
 }
 
-fn format_jmx_password(jmx_password: &str, mask: bool) -> String {
-    if mask {
+fn format_jmx_password(sensitive: &str, mask: bool) -> String {
+    if mask && !sensitive.is_empty() {
         "****".to_string()
     } else {
-        jmx_password.to_string()
+        sensitive.to_string()
     }
 }
 

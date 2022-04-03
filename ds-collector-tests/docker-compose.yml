@@ -6,6 +6,7 @@ services:
         context: .
         dockerfile: integration-cassandra.docker
     image: ds-collector:integration-cassandra
+    container_name: ds-collector-tests_cassandra-00_1
     environment:
         CASSANDRA_ENDPOINT_SNITCH: "GossipingPropertyFileSnitch"
         CASSANDRA_CLUSTER_NAME: cluster1
@@ -23,6 +24,7 @@ services:
         context: .
         dockerfile: integration-cassandra.docker
     image: ds-collector:integration-cassandra
+    container_name: ds-collector-tests_cassandra-01_1
     depends_on:
         - cassandra-00
     environment:
@@ -45,6 +47,7 @@ services:
        context: .
        dockerfile: integration-cassandra.docker
     image: ds-collector:integration-cassandra
+    container_name: ds-collector-tests_cassandra-02_1
     depends_on:
        - cassandra-00
     environment:
@@ -67,6 +70,7 @@ services:
         context: .
         dockerfile: integration-bastion.docker
     image: ds-collector:integration-bastion
+    container_name: ds-collector-tests_bastion_1
     volumes:
       - ./collector:/collector
       - ../ds-collector-tests:/ds-collector-tests

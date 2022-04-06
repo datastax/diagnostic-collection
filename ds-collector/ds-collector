@@ -495,6 +495,7 @@ collect_via_rust() {
   export no_nodesyncrate
   export solr_data_dir
   export skip_dse_solr
+  export script_directory
   if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?
@@ -920,10 +921,14 @@ get_info() {
   node_connect 'mkdir -p '$baseDir''
   if [ "$?" = "0" ]; then
     node_push "$0" "$baseDir/$targetFile"
-
     node_push "${script_directory}/${prometheus}" "$baseDir/${prometheus}"
     node_push "${script_directory}/$dstat" "$baseDir/$dstat"
     node_push "${script_directory}/collect-info" "$baseDir/collect-info"
+
+    node_connect "mkdir $baseDir/etc"
+    for f in ${script_directory}/etc/*; do
+      node_push "$f" "$baseDir/etc"
+    done
 
     if [ "$copyConfig" ]; then
       node_push "$configPath" "$baseDir/$(basename $configFile)"
@@ -964,7 +969,8 @@ get_info() {
 }
 
 ####### main
-script_directory=$(dirname "$0")
+# The more complex construct is more reliable than: script_directory=$(dirname "$0")
+script_directory=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 date=$(date +'%Y_%m_%d_%H%M_%s')
 baseDir="/tmp/datastax"
 artifactDir="$baseDir/$(hostname)_artifacts_$date"
@@ -1103,7 +1109,6 @@ then
   jmxUsername=$(escape_special_chars "$jmxUsername")
   jmxPassword=$(escape_special_chars "$jmxPassword")
 fi
-
 
 if [ $debug ] ; then
   set -x

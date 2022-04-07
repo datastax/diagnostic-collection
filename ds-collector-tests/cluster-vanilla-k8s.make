@@ -23,17 +23,17 @@ setup:
 	cp TEST-cluster-vanilla-k8s-*_secret.key collector/ || true
 	test -f collector/collect-info
 	# setup k8s cluster
-	wget https://thelastpickle.com/files/2021-01-31-cass_operator/01-kind-config.yaml -O /tmp/datastax/01-kind-config.yaml
+	cp k8s-manifests/01-kind-config.yaml /tmp/datastax/01-kind-config.yaml
 	kind create cluster --name ds-collector-cluster-vanilla-k8s --config /tmp/datastax/01-kind-config.yaml
 	kubectl create ns cass-operator
-	kubectl -n cass-operator apply -f https://thelastpickle.com/files/2021-01-31-cass_operator/02-storageclass-kind.yaml
-	kubectl -n cass-operator apply -f https://thelastpickle.com/files/2021-01-31-cass_operator/11-install-cass-operator-v1.1.yaml
+	kubectl -n cass-operator apply -f k8s-manifests/02-storageclass-kind.yaml
+	kubectl -n cass-operator apply -f k8s-manifests/11-install-cass-operator-v1.1.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cass-operator-") || kubectl -n cass-operator get pod | grep -q "0/1" ; do kubectl -n cass-operator get pod ; echo "waiting 10s…" ; sleep 10 ; done
-	kubectl -n cass-operator apply -f https://thelastpickle.com/files/2021-01-31-cass_operator/13-cassandra-cluster-3nodes.yaml
+	kubectl -n cass-operator apply -f k8s-manifests/13-cassandra-cluster-3nodes.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster1-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
 
 
 teardown:
 	kubectl delete cassdcs --all-namespaces --all
-	kubectl delete -f https://thelastpickle.com/files/2021-01-31-cass_operator/11-install-cass-operator-v1.1.yaml
+	kubectl delete -f k8s-manifests/11-install-cass-operator-v1.1.yaml
 	kind delete cluster --name ds-collector-cluster-vanilla-k8s

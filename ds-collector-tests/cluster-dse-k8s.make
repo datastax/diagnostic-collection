@@ -23,10 +23,10 @@ setup:
 	cp TEST-cluster-dse-k8s-*_secret.key collector/ || true
 	test -f collector/collect-info
 	# setup k8s cluster
-	wget https://thelastpickle.com/files/2021-01-31-cass_operator/01-kind-config.yaml -O /tmp/datastax/01-kind-config.yaml
+	cp k8s-manifests/01-kind-config.yaml /tmp/datastax/01-kind-config.yaml
 	kind create cluster --name ds-collector-cluster-dse-k8s --config /tmp/datastax/01-kind-config.yaml
 	kubectl create ns cass-operator
-	kubectl -n cass-operator apply -f https://thelastpickle.com/files/2021-01-31-cass_operator/02-storageclass-kind.yaml
+	kubectl -n cass-operator apply -f k8s-manifests/02-storageclass-kind.yaml
 	kubectl -n cass-operator apply -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/docs/user/cass-operator-manifests.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cass-operator-") || kubectl -n cass-operator get pod | grep -q "0/1" ; do kubectl -n cass-operator get pod ; echo "waiting 10s…" ; sleep 10 ; done
 	kubectl -n cass-operator apply -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/operator/example-cassdc-yaml/dse-6.8.x/example-cassdc-minimal.yaml

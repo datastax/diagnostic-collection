@@ -51,7 +51,7 @@ jobs:
               make -f cluster-one-node-vanilla-ssh-docker.make
 
   test-collector-k8s-cassandra:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
@@ -67,7 +67,7 @@ jobs:
         make -f cluster-vanilla-k8s.make
 
   test-collector-k8s-dse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2

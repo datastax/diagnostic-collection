@@ -5,9 +5,9 @@ kind: CassandraDatacenter
 metadata:
   name: dc1
 spec:
-  clusterName: cluster1
-  serverType: cassandra
-  serverVersion: "3.11.12"
+  clusterName: cluster2
+  serverType: dse
+  serverVersion: "6.8.21"
   managementApiAuth:
     insecure: {}
   size: 3
@@ -19,11 +19,12 @@ spec:
       resources:
         requests:
           storage: 5Gi
-  config:    
-    cassandra-yaml:
-      authenticator: org.apache.cassandra.auth.PasswordAuthenticator
-      authorizer: org.apache.cassandra.auth.CassandraAuthorizer
-      role_manager: org.apache.cassandra.auth.CassandraRoleManager
-    jvm-options:
-      initial_heap_size: "400M"
-      max_heap_size: "400M"
+  config:
+    jvm-server-options:
+      initial_heap_size: "800M"
+      max_heap_size: "800M"
+      max_direct_memory: "800M"
+      additional-jvm-opts:
+        # As the database comes up for the first time, set system keyspaces to RF=3
+        - "-Ddse.system_distributed_replication_dc_names=dc1"
+        - "-Ddse.system_distributed_replication_per_dc=3"

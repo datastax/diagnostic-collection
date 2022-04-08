@@ -23,6 +23,12 @@ ENV PATH $CASSANDRA_HOME/bin:$PATH
 # the following are required also for non-interactive commands, so preprend them to /etc/bash.bashrc
 RUN sed -i '1s;^;export PATH=/opt/cassandra/bin:$PATH\n;' /etc/bash.bashrc
 RUN sed -i '1s;^;export JAVA_HOME=/opt/java/openjdk\n;' /etc/bash.bashrc
+RUN touch $CASSANDRA_CONF/testfile.owneronly_cassandra && \
+    chown cassandra:cassandra $CASSANDRA_CONF/testfile.owneronly_cassandra && \
+    chmod 0600 $CASSANDRA_CONF/testfile.owneronly_cassandra && \
+    touch $CASSANDRA_CONF/testfile.owneronly_root && \
+    chown root:root $CASSANDRA_CONF/testfile.owneronly_root && \
+    chmod 0600 $CASSANDRA_CONF/testfile.owneronly_root
 
 EXPOSE 22
 ENTRYPOINT ( [ -z ${CASSANDRA_WAIT_ON+x} ] || wait-for-it -t 180 $CASSANDRA_WAIT_ON:9042 ) && service ssh start && docker-entrypoint.sh

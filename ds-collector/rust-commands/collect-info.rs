@@ -68,6 +68,7 @@ fn main() {
         dse_bin_dir: &env::var("dse_bin_dir").unwrap_or("".to_string()),
         dt_opts: &env::var("dt_opts").unwrap_or("".to_string()),
         solr_data_dir: &env::var("solr_data_dir").unwrap_or("".to_string()),
+        script_directory: &env::var("script_directory").unwrap_or(".".to_string()),
     };
 
     check_all_commands(&options);
@@ -197,6 +198,7 @@ fn execute_command(cmd: &Cmd, options: &Options, mut auditor: &File) -> bool {
 fn format_command(cmd: &str, options: &Options) -> String {
     cmd.replace("{base_dir}", options.base_dir)
         .replace("{dse_bin_dir}", options.dse_bin_dir)
+        .replace("{script_directory}", options.script_directory)
 }
 
 fn format_args(args: &str, options: &Options, mask: bool) -> String {
@@ -217,6 +219,7 @@ fn format_args(args: &str, options: &Options, mask: bool) -> String {
         .replace("{cqlsh_opts}", &format_cqlsh_opts(&options.cqlsh_opts, options.cqlsh_password, mask))
         .replace("{dt_opts}", options.dt_opts)
         .replace("{solr_data_dir}", options.solr_data_dir)
+        .replace("{script_directory}", options.script_directory)
 }
 
 fn nodetool_ssl(jmx_ssl: bool) -> String {
@@ -298,6 +301,7 @@ struct Options<'a> {
     dse_bin_dir: &'a str,
     dt_opts: &'a str,
     solr_data_dir: &'a str,
+    script_directory: &'a str,
 }
 
 struct Cmd<'a> {
@@ -733,8 +737,8 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     // cp -r $logHome/* $artifactSubDir/.
     Cmd {
-        command: "cp",
-        args: "-R -L {log_home} {artifact_dir}/logs",
+        command: "{script_directory}/etc/cpReadable.sh",
+        args: "{log_home} {artifact_dir}/logs",
         file: "",
         optional: false,
         skip_flags: "",
@@ -744,8 +748,8 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     // cp -r $configHome/* $artifactSubDir/.
     Cmd {
-        command: "cp",
-        args: "-R -L {config_home} {artifact_dir}/conf",
+        command: "{script_directory}/etc/cpReadable.sh",
+        args: "{config_home} {artifact_dir}/conf",
         file: "",
         optional: false,
         skip_flags: "",
@@ -1117,8 +1121,8 @@ const COMMANDS: &[Cmd<'static>] = &[
     },
     // cp "/etc/default/dse" "$artifactDir/conf/dse/"
     Cmd {
-        command: "cp",
-        args: "-R -L /etc/default/dse {artifact_dir}/conf/dse/",
+        command: "{script_directory}/etc/cpReadable.sh",
+        args: "/etc/default/dse {artifact_dir}/conf/dse/",
         file: "",
         optional: true,
         skip_flags: "skip_dse",

@@ -25,18 +25,28 @@ setup:
 	# setup k8s cluster
 	cp k8s-manifests/01-kind-config.yaml /tmp/datastax/01-kind-config.yaml
 	kind create cluster --name ds-collector-cluster-dse-k8s --config /tmp/datastax/01-kind-config.yaml
-	kubectl create ns cass-operator
-	kubectl -n cass-operator apply -f k8s-manifests/02-storageclass-kind.yaml
-	kubectl -n cass-operator apply -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/docs/user/cass-operator-manifests.yaml
+	kubectl apply -f k8s-manifests/02-storageclass-kind.yaml
+
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
+	n=0; \
+	while [ $${n} -ne 3 ] ; do \
+		echo "waiting for cert-manager 10s…" ; sleep 10 ; \
+		kubectl get pods -n cert-manager ; \
+        n=`kubectl get pods -n cert-manager | egrep -c '1/1.*Running'`; \
+    done; \
+    true
+
+	# Note if you change the cass-operator version, you may also want to change the DSE version in the example-cassdc-minimal-dse.yaml file
+	kubectl apply -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
 	while (! kubectl -n cass-operator get pod | grep -q "cass-operator-") || kubectl -n cass-operator get pod | grep -q "0/1" ; do kubectl -n cass-operator get pod ; echo "waiting 10s…" ; sleep 10 ; done
-	kubectl -n cass-operator apply -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/operator/example-cassdc-yaml/dse-6.8.x/example-cassdc-minimal.yaml
+	kubectl -n cass-operator apply -f k8s-manifests/example-cassdc-minimal-dse.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster2-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
 
 	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> test-collector-k8s-dse.conf
 	@echo "git_sha=$$(git rev-parse HEAD)" >> test-collector-k8s-dse.conf
 
-
 teardown:
 	kubectl delete cassdcs --all-namespaces --all
-	kubectl delete -f https://raw.githubusercontent.com/k8ssandra/cass-operator/v1.7.1/docs/user/cass-operator-manifests.yaml
+	kubectl delete -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
+	kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
 	kind delete cluster --name ds-collector-cluster-dse-k8s

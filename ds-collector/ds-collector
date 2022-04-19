@@ -147,7 +147,7 @@ list_cassandra_nodes() {
     ip_command="ip -4 a"
     command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
     for ip in ${cassandraNodes} ; do
-      ${ip_command} | grep -q '${ip}/' && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
+      ${ip_command} | grep -q '${ip}[/ ]' && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
     done
 
     # more accurate disk space check

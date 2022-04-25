@@ -474,7 +474,7 @@ collect_via_rust() {
   baseMessage="calling collect-info"
   export baseDir
   export logHome
-  export data_dir=${cassandra_data_dir}
+  export data_dir=${cassandra_data_dir//,/ }
   export configHome
   export skipSudo="${skipSudo:-false}"
   export skip_dse="${skip_dse:-false}"
@@ -1143,4 +1143,3 @@ elif [ "$uploadMode" ]; then
 fi
 
 echo -e  \\n"exiting...mode required!"; halp; exit 2
-

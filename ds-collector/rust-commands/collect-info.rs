@@ -84,7 +84,9 @@ fn check_all_commands(options: &Options) {
         if !checked_commands.contains(&cmd_str) {
             checked_commands.insert(cmd_str.clone());
 
-            print!("\tlooking for `{}`… ", cmd_str);
+            let sudo_str = (if cmd.use_sudo && !options.skip_sudo { "sudo " } else { "" }).to_string();
+
+            print!("\tlooking for `{}{}`… ", sudo_str, cmd_str);
             io::stdout().flush().ok().expect("Could not flush stdout");
 
             let result = check_command(cmd, &options);
@@ -153,14 +155,25 @@ fn should_skip_command(cmd: &Cmd) -> bool {
 
 fn check_command(cmd: &Cmd, options: &Options) -> (bool, String) {
     let cmd_str = format_command(cmd.command, options);
+    let mut check_cmd = create_check_command(&cmd, &options);
 
-    let result = create_command("sh", &cmd, &options)
+    let result = check_cmd.0
         .arg("-c")
         .arg(format!("command -v {}", cmd_str))
         .output()
-        .expect(format!("failed to execute `sh -c command -v {}`", cmd_str).as_str());
-        
+        .expect(format!("failed to execute `{} -c 'command -v {}'`", check_cmd.1, cmd_str).as_str());
+
     (result.status.success(), std::str::from_utf8(&result.stdout).unwrap().to_string())
+}
+
+fn create_check_command(cmd: &Cmd, options: &Options) -> (Command, String) {
+  if cmd.use_sudo && !options.skip_sudo {
+    let mut command = Command::new("sudo");
+    command.arg("sh");
+    (command, "sudo sh".to_string())
+  } else {
+    (Command::new("sh"), "sh".to_string())
+  }
 }
 
 fn execute_command(cmd: &Cmd, options: &Options, mut auditor: &File) -> bool {

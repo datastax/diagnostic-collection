@@ -274,6 +274,7 @@ node_checks() {
   [[ -f "$baseDir/${prometheus}" ]] || { echo >&2 "$baseDir/${prometheus} must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
+  [ "$skipSudo" = "true" ] || ( sudo -n ls 2>/dev/null ) || { echo >&2 "sudo (without password) is not configured. Configure it, or set skipSudo to true"; exit 1; }
   # detect if df supports --portability
   DF_OPT=""
   ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
@@ -925,7 +926,7 @@ get_info() {
     node_push "${script_directory}/$dstat" "$baseDir/$dstat"
     node_push "${script_directory}/collect-info" "$baseDir/collect-info"
 
-    node_connect "mkdir $baseDir/etc"
+    node_connect "mkdir -p $baseDir/etc"
     for f in ${script_directory}/etc/*; do
       node_push "$f" "$baseDir/etc"
     done
@@ -944,6 +945,8 @@ get_info() {
     else
       node_connect "$baseDir/$targetFile ${collectionArgs[*]}"
     fi
+    print_status_state
+    [[ 0 == $statusState ]] || return $statusState
     latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile' 2>&1')
     if echo "${latestArtifacts}" | grep -q "No such file or directory" ; then
         echo collection from $hostName failed to generate any artifacts

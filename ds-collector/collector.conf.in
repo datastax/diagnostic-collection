@@ -91,10 +91,6 @@
 #jmxPassword=""
 #jmxSSL="false"
 
-# skip iostat and vmstat collection
-#
-#skipStat="true"
-
 # skip any calls that require sudo
 #
 #skipSudo="true"

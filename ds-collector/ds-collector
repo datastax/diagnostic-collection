@@ -267,6 +267,8 @@ bastion_checks() {
   [[ -f "${script_directory}/${prometheus/jar/txt}" ]] || [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${prometheus/jar/txt} or ${prometheus} needs to be in the collector directory ${script_directory}"; exit 1; }
   [[ -f "${script_directory}/${prometheus}" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${script_directory}/${prometheus/jar/txt}" | xxd -r -p > "${script_directory}/${prometheus}" ); }
   [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${script_directory}/${prometheus} needs to be in the collector directory ${script_directory}/"; exit 1; }
+  # warnings
+  [ "$skipStat" = "true" ] && { echo >&2 "WARNING – skipStat is enabled, this is only intended for debugging purposes, and will not produce a useful tarball"; }
 }
 
 node_checks() {
@@ -479,6 +481,7 @@ collect_via_rust() {
   export configHome
   export skipSudo="${skipSudo:-false}"
   export skip_dse="${skip_dse:-false}"
+  export skipStat="${skipStat:-false}"
   export prometheus_jar="${baseDir}/${prometheus}"
   export jmxPort
   export jmxUsername

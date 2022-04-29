@@ -160,7 +160,7 @@ list_cassandra_nodes() {
 
     # also grab the cluster name
     cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
-    clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
+    clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}' | tr -d '\r')
     if [ $? = 0 ]; then
       export clusterName
       echo "Cluster name identified as ${clusterName}"

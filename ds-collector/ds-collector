@@ -226,7 +226,7 @@ node_connect_docker() {
 }
 
 node_connect_k8s() {
-  kubectl -n "$k8s_namespace" exec -ti "$hostName" -- /bin/bash -c "$1"
+  kubectl -n "$k8s_namespace" exec $k8s_container_name_opt -ti "$hostName" -- /bin/bash -c "$1"
   # option to direct standard out and error to a log file and screen
   statusState=$?
   return $statusState
@@ -819,7 +819,7 @@ node_push_docker() {
 }
 
 node_push_k8s() {
-  kubectl -n "$k8s_namespace" cp "$1" "$hostName:$2"
+  kubectl -n "$k8s_namespace" cp "$1" "$hostName:$2" $k8s_container_name_opt
   statusState=$?
   print_status_state
   return $statusState
@@ -1012,6 +1012,7 @@ sshOptionConnectAttempts="true"
 
 # k8s
 k8s_namespace="default"
+k8s_container_name=""
 
 # JMX port
 jmxPort="7199"
@@ -1061,6 +1062,7 @@ myVariables=(
   uploadMode
   cassandraNodes
   dt_opts
+  k8s_container_name_opt
   sudo_script_on_node
   skipNodes)
 
@@ -1108,6 +1110,11 @@ set_scp_options
 
 if [ -f "$hostName" ]; then
   hostFile=$hostName
+fi
+
+if [ -n "$k8s_container_name" ]
+then
+  k8s_container_name_opt="-c $k8s_container_name"
 fi
 
 if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]

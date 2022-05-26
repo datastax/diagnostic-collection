@@ -31,7 +31,7 @@ edit collector.conf
 ./ds-collector -X -f collector.conf -n <CASSANDRA_CONTACT_NODE>
 ```
 
-If "NOTOK" appears in any of the output, then troubleshoot…
+If "NOTOK" appears in any of the output, then troubleshoot… you can find some troubleshooting guidelines in [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
  
 <br /> 

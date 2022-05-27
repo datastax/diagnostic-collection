@@ -611,7 +611,8 @@ collect_info_setup() {
     cqlshOpts="$cqlshOpts --ssl"
   fi
   mkdir -p "${artifactDir}/sstable-statistics/"
-  echo "DESCRIBE FULL SCHEMA;" > "$artifactDir/execute_schema.cql"
+  echo "DESCRIBE SCHEMA;" > "$artifactDir/execute_schema.cql"
+  echo "DESCRIBE FULL SCHEMA;" > "$artifactDir/execute_full_schema.cql"
   echo "DESCRIBE CLUSTER;" > "$artifactDir/execute_metadata.cql"
 
   # 'timeout -t SECS' is required on older busybox

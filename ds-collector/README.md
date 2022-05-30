@@ -62,6 +62,8 @@ For each node the script performs a number of steps: connect to a target host an
 
 Once all nodes have been collected, the script on the bastion/jumpbox then may encrypt all the diagnostic node tarballs, and upload them to the configured S3 bucket.
 
+The process is further detailed at [PROCESS.md](PROCESS.md).
+
 Files of note in the bundle are:
 
 * `ds-collector` the script that does the work.
@@ -159,50 +161,45 @@ wget https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/c
 ./ds-collector -f collector.conf -a some-node_artifacts_some_timestamp.tar.gz
 ```
 
-* Auditing the diagnostic tarballs before uploading them. If you need to audit the contents of the tarballs before they are securely uploaded to us, do the following
+* Auditing and/or obfuscating the diagnostic tarballs before uploading them. If you need to audit the contents of the tarballs before they are securely uploaded to us, do the following
+
+    ```
+    sed -i 's/^#?keepArtifact=.*/keepArtifact=\"true\"/'
+    sed -i 's/^#?skipS3=.*/skipS3=\"true\"/'
+    
+    ./ds-collector -X -f collector.conf -n <CASSANDRA_CONTACT_NODE>
+    
+    # audit/obfuscate files in /tmp/datastax/
+    
+    # when ready to upload to s3
+    ./ds-collector -f collector.conf -a /tmp/datastax
+    ```
+
+* To keep files on the node after uploading:
 ```
-sed -i 's/^#?keepArtifact=.*/keepArtifact=\"true\"/'
-sed -i 's/^#?skipS3=.*/skipS3=\"true\"/'
-
-./ds-collector -X -f collector.conf -n <CASSANDRA_CONTACT_NODE>
-
-# audit files in /tmp/datastax/
-
-# when ready to upload to s3
-./ds-collector -f collector.conf -a /tmp/datastax
+sed -i 's/^#?keepArtifact=.*/keepArtifact=\"true\"/' collector.conf
 ```
+
+* When Bastion Cannot Access AWS S3 to Upload
+
+    ```
+    # Configure skipS3="true"
+    sed -i 's/^#?skipS3=.*/skipS3=\"true\"/' collector.conf
+
+    # Run ./ds-collector on the Bastion
+    # Find a Unix environment that can access both the Bastion and AWS
+    # Unpack ds-collector to this Unix environment, including the secret `.key` file
+    # Transfer files from the Bastion base directory (e.g. /tmp/datastax) to this Unix 
+    #    environment; place them in the same base directory
+
+    # Run `ds-collector` on this Unix environment, specifying the `-a` flag ("upload mode"); 
+    #    the collector will not run but the files will upload to S3. 
+    ./ds-collector -f collector.conf -a /tmp/datastax
+    ```
 
 Troubleshooting
 ===============
-
-* The script is failing and the error message is not clear. Please enable verbose in the script by adding the `-v` option on the command line. Run the script again. If the failure is still unclear, contact us for further help attaching the log files found in `/tmp/datastax`.
-
-* The bastion/jumpbox does not have an internet access and the s3 upload fails. In this scenario, pull the diagnostic tarballs onto a machine that does have internet access and upload from there.
-```
-scp -r <bastion/jumpbox>:/path-to-collector-folder> .
-scp -r <bastion/jumpbox>:/tmp/datastax .
-
-cd collector
-./ds-collector -f collector.conf -a "$(pwd)/../datastax"
-```
-
-* To run the collector when `xxd` is unavailable on the bastion, manually download the `collector-0.11.1-SNAPSHOT.jar` file to the `collector/` folder.
-```
-cd collector
-wget https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar
-```
-
-* The `nodetool` command is not found in $PATH on the nodes. While the `addPath` and `prependPath` options (see collector.conf) can be used for other commands to be found on the node, the `nodetool` command is used before these variables are applied. To fix this manually update the `nodetoolCmd` variable in the `list_cassandra_nodes` function in the `ds-colllector` script. (See https://github.com/datastax/diagnostic-collection/issues/83 )
-
-* Disabling the s3 upload. The artifacts will be left in the `/tmp/datastax/` folder.
-```
-sed -i 's/^#?skipS3=.*/skipS3=\"true\"/'
-```
-
-* Keeping the artifacts on disk after the s3 upload
-```
-sed -i 's/^#?keepArtifact=.*/keepArtifact=\"true\"/'
-```
+This section moved to [TROUBLESHOOTING.md](TROUBLESHOOTING.md), and expanded.
 
 
 What is Collected

@@ -28,6 +28,7 @@
 #
 #use_k8s="true"
 #k8s_namespace="default"
+#k8s_container_name=""
 
 # the (ssh) user name to use when connecting to the target nodes(),
 # the user should have sudo access.

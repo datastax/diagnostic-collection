@@ -135,7 +135,7 @@ list_cassandra_nodes_client() {
     ip_command="ip -4 a"
     command -v ip >/dev/null 2>&1 || ip_command="ifconfig"
     for ip in ${cassandraNodes} ; do
-      ${ip_command} | grep -q $ip && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
+      ${ip_command} | grep -q '${ip}[/ ]' && { echo >&2 "The ds-collector script cannot be executed from a Cassandra/DSE node. Please execute the script from a jumpbox/bastion server that has access to all nodes to the data-center/cluster."; exit 1; }
     done
 
     # more accurate disk space check
@@ -148,7 +148,7 @@ list_cassandra_nodes_client() {
 
     # also grab the cluster name
     cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
-    clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}')
+    clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}' | tr -d '\r')
     if [ $? = 0 ]; then
       export clusterName
       echo "Cluster name identified as ${clusterName}"
@@ -229,7 +229,7 @@ node_connect_docker() {
 }
 
 node_connect_k8s() {
-  kubectl -n "$k8s_namespace" exec -ti "$hostName" -- /bin/bash -c "$1"
+  kubectl -n "$k8s_namespace" exec $k8s_container_name_opt -ti "$hostName" -- /bin/bash -c "$1"
   # option to direct standard out and error to a log file and screen
   statusState=$?
   return $statusState
@@ -270,6 +270,8 @@ bastion_checks() {
   [[ -f "${script_directory}/${prometheus/jar/txt}" ]] || [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${prometheus/jar/txt} or ${prometheus} needs to be in the collector directory ${script_directory}"; exit 1; }
   [[ -f "${script_directory}/${prometheus}" ]] || { ( LC_ALL=C tr -cd 0-9a-fA-F < "${script_directory}/${prometheus/jar/txt}" | xxd -r -p > "${script_directory}/${prometheus}" ); }
   [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${script_directory}/${prometheus} needs to be in the collector directory ${script_directory}/"; exit 1; }
+  # warnings
+  [ "$skipStat" = "true" ] && { echo >&2 "WARNING – skipStat is enabled, this is only intended for debugging purposes, and will not produce a useful tarball"; }
 }
 
 node_checks() {
@@ -277,6 +279,7 @@ node_checks() {
   [[ -f "$baseDir/${prometheus}" ]] || { echo >&2 "$baseDir/${prometheus} must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
+  [ "$skipSudo" = "true" ] || ( sudo -n ls 2>/dev/null ) || { echo >&2 "sudo (without password) is not configured. Configure it, or set skipSudo to true"; exit 1; }
   # detect if df supports --portability
   DF_OPT=""
   ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
@@ -477,10 +480,11 @@ collect_via_rust() {
   baseMessage="calling collect-info"
   export baseDir
   export logHome
-  export data_dir=${cassandra_data_dir}
+  export data_dir=${cassandra_data_dir//,/ }
   export configHome
   export skipSudo="${skipSudo:-false}"
   export skip_dse="${skip_dse:-false}"
+  export skipStat="${skipStat:-false}"
   export prometheus_jar="${baseDir}/${prometheus}"
   export jmxHost
   export jmxPort
@@ -500,6 +504,7 @@ collect_via_rust() {
   export no_nodesyncrate
   export solr_data_dir
   export skip_dse_solr
+  export script_directory
   if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
   ${baseDir}/collect-info "$server_pid" "$artifactDir" 
   statusState=$?
@@ -872,7 +877,7 @@ node_push_docker() {
 }
 
 node_push_k8s() {
-  kubectl -n "$k8s_namespace" cp "$1" "$hostName:$2"
+  kubectl -n "$k8s_namespace" cp "$1" "$hostName:$2" $k8s_container_name_opt
   statusState=$?
   print_status_state
   return $statusState
@@ -978,10 +983,14 @@ get_info() {
   node_connect 'mkdir -p '$baseDir''
   if [ "$?" = "0" ]; then
     node_push "$0" "$baseDir/$targetFile"
-
     node_push "${script_directory}/${prometheus}" "$baseDir/${prometheus}"
     node_push "${script_directory}/$dstat" "$baseDir/$dstat"
     node_push "${script_directory}/collect-info" "$baseDir/collect-info"
+
+    node_connect "mkdir -p $baseDir/etc"
+    for f in ${script_directory}/etc/*; do
+      node_push "$f" "$baseDir/etc"
+    done
 
     if [ "$copyConfig" ]; then
       node_push "$configPath" "$baseDir/$(basename $configFile)"
@@ -997,6 +1006,8 @@ get_info() {
     else
       node_connect "$baseDir/$targetFile ${collectionArgs[*]}"
     fi
+    print_status_state
+    [[ 0 == $statusState ]] || return $statusState
     latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile' 2>&1')
     if echo "${latestArtifacts}" | grep -q "No such file or directory" ; then
         echo collection from $hostName failed to generate any artifacts
@@ -1022,7 +1033,8 @@ get_info() {
 }
 
 ####### main
-script_directory=$(dirname "$0")
+# The more complex construct is more reliable than: script_directory=$(dirname "$0")
+script_directory=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 date=$(date +'%Y_%m_%d_%H%M_%s')
 baseDir="/tmp/datastax"
 artifactDir="$baseDir/$(hostname)_artifacts_$date"
@@ -1058,6 +1070,7 @@ sshOptionConnectAttempts="true"
 
 # k8s
 k8s_namespace="default"
+k8s_container_name=""
 
 # s3
 bucket="collector-dead-drop"
@@ -1107,6 +1120,7 @@ myVariables=(
   uploadMode
   cassandraNodes
   dt_opts
+  k8s_container_name_opt
   sudo_script_on_node
   skipNodes)
 
@@ -1157,12 +1171,16 @@ if [ -f "$hostName" ]; then
   hostFile=$hostName
 fi
 
+if [ -n "$k8s_container_name" ]
+then
+  k8s_container_name_opt="-c $k8s_container_name"
+fi
+
 if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
 then
   jmxUsername=$(escape_special_chars "$jmxUsername")
   jmxPassword=$(escape_special_chars "$jmxPassword")
 fi
-
 
 if [ $debug ] ; then
   set -x
@@ -1203,4 +1221,3 @@ elif [ "$uploadMode" ]; then
 fi
 
 echo -e  \\n"exiting...mode required!"; halp; exit 2
-

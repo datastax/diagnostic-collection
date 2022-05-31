@@ -36,6 +36,9 @@ setup:
 	docker-compose ps
 	while (! docker-compose ps | grep -q "ds-collector-tests_cassandra-00_1") || docker-compose ps | grep -q -e "Up (health: starting)" -e "running (started)" || docker-compose ps | grep -q "Exit" ; do docker-compose ps ; echo "waiting 60s…" ; sleep 60 ; done
 
+	# ensure we have a file that is not owned by the copying user
+	docker exec -t ds-collector-tests_cassandra-00_1 bash -c 'chown root:root /etc/cassandra/testfile.owneronly_root && chown cassandra:cassandra /etc/cassandra/testfile.owneronly_cassandra'
+
 	# verify sshd and open CQL ports
 	docker exec -t ds-collector-tests_cassandra-00_1 bash -c 'pgrep sshd 2>&1 > /dev/null && echo "SSHd is running" || echo "SSHd is not running"'
 	docker exec -t ds-collector-tests_cassandra-00_1 bash -c 'ps aux | grep cassandra | grep -v grep 2>&1 > /dev/null && echo "Cassandra is running" || echo "Cassandra is not running"'

@@ -147,7 +147,7 @@ Resolution to Problem 3 is more involved as it can occur for a number of reasons
 While the `addPath` and `prependPath` options can be used for other commands to be found on the node, the `nodetool` command is used before these variables are applied.
 
 ### What to do:
-Until [this issue](https://github.com/datastax/diagnostic-collection/issues/83) is resolved, you will need to edit `ds-collector` and update the `nodetoolCmd=` variable (assigned in the `list_cassandra_nodes()` function) to be the full path to the `nodetool` script.
+Configure `nodetoolCmd=` variable to be the full path to the `nodetool` script.
 
 
 ## Error about `sudo`
@@ -202,7 +202,7 @@ Other command-line arguments are needed:
 The `xxd` utility is used to convert a text file included with the collector into a `.jar` file that can be used to process metrics.
 
 ### What to do:
-You can install the `xxd` utility on the platform (e.g. it is stand-alone package in Ubuntu, included as part of `vim-common` on RHEL). Alternately, you can download the compiled `.jar` file into the same folder on the Bastion as you have unpacked the `ds-collector` script. The `.jar` can be downloaded from [https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar](https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar).
+You can install the `xxd` utility on the platform (e.g. it is stand-alone package in Ubuntu, included as part of `vim-common` on RHEL). Alternately, you can download the compiled `.jar` file into the same folder on the Bastion as you have unpacked the `ds-collector` script. The `.jar` can be downloaded from [https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.16.2-SNAPSHOT.jar](https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.16.2-SNAPSHOT.jar).
 
 
 ## Error Involving `cpReadable.sh`

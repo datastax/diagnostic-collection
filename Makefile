@@ -9,8 +9,8 @@ collector: check-env generate-key
 	@rm -f collector/collector.conf
 	@mv collector/collector.hosts.in collector/collector.hosts
 	@mv collector/collector.conf.in collector/collector.conf
-	@od -An -vtx1 collector/collector-0.11.1-SNAPSHOT.jar > collector/collector-0.11.1-SNAPSHOT.txt
-	@rm collector/collector-0.11.1-SNAPSHOT.jar
+	@od -An -vtx1 collector/collector-0.16.2-SNAPSHOT.jar > collector/collector-0.16.2-SNAPSHOT.txt
+	@rm collector/collector-0.16.2-SNAPSHOT.jar
 	@sed -i.bak 's/\#issueId=.*/issueId=\"$(subst /,-,$(ISSUE))\"/' collector/collector.conf
 	@sed -i.bak 's/\#skipS3/skipS3/' collector/collector.conf
 ifdef COLLECTOR_S3_AWS_KEY

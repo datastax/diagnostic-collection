@@ -24,6 +24,9 @@ endif
 ifdef COLLECTOR_SECRETSMANAGER_KEY
 ifdef COLLECTOR_SECRETSMANAGER_SECRET
 	@sed -i.bak 's/encrypt_uploads=.*/encrypt_uploads=\"true\"/' collector/collector.conf
+	$(eval KEY_FILE_NAME := $(shell echo $(subst /,-,$(ISSUE))_secret.key))
+	$(eval KEY_MD5_SUM := $(shell md5sum $(KEY_FILE_NAME)))
+	@sed -i.bak 's/\#keyMD5sum=.*/keyMD5sum=\"${KEY_MD5_SUM}\"/' collector/collector.conf
 endif
 endif
 ifdef is_docker

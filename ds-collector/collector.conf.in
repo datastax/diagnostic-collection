@@ -84,6 +84,9 @@
 #
 #issueId="XXX-6"
 
+# The MD5 checksum of the provided .key file
+#keyMD5sum=
+
 # the JMX port to connect to when when gathering metrics via JMX
 # this will be the value that JMX_PORT is set to in the cassandra-env.sh file
 #

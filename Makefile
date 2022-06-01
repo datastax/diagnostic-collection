@@ -97,8 +97,8 @@ ifdef COLLECTOR_SECRETSMANAGER_SECRET
 		echo "I will now add the key to the Secrets Manager" ; \
 		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
 	else \
-		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS}" ; \
-		echo "Issue $(subst /,-,$(ISSUE)) already already exists. Not creating a new secret." ; \
+		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS} so will fetch it." ; \
+		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | jq .SecretString | xargs printf > ${KEY_FILE_NAME} ;\
 	fi
 endif
 endif

@@ -235,7 +235,8 @@ node_connect_k8s() {
 node_connect_ssh() {
   ssh_command="ssh $userName@$hostName $sshArgs -n -t \"$1\" #> /dev/null 2>&1"
   if [ -n "$sshPassword" ]; then
-    ssh_command="sshpass -p $sshPassword $ssh_command"
+    export SSHPASS="${sshPassword}"
+    ssh_command="sshpass -e $ssh_command"
   fi
   eval "$ssh_command"
   # option to direct standard out and error to a log file and screen
@@ -828,7 +829,8 @@ node_push_k8s() {
 node_push_ssh() {
   scp_command="scp $scpArgs $1 $userName@${hostName}:$2"
   if [ -n "$sshPassword" ]; then
-    scp_command="sshpass -p $sshPassword $scp_command"
+    export SSHPASS="${sshPassword}"
+    scp_command="sshpass -e $scp_command"
   fi
   $scp_command
   statusState=$?
@@ -868,7 +870,8 @@ node_pull_k8s() {
 node_pull_ssh() {
   scp_command="scp $scpArgs $userName@${hostName}:${1} $baseDir/."
   if [ -n "$sshPassword" ]; then
-    scp_command="sshpass -p $sshPassword $scp_command"
+    export SSHPASS="${sshPassword}"
+    scp_command="sshpass -e $scp_command"
   fi
   $scp_command
   statusState=$?

@@ -33,10 +33,10 @@ jobs:
         make -f cluster-vanilla-ssh-docker.make
 
   test-collector-ssh-docker-macos:
-          runs-on: macos-10.15
+          runs-on: macos-11
 
           steps:
-          - uses: docker-practice/actions-setup-docker@1.0.8
+          - uses: docker-practice/actions-setup-docker@1.0.10
           - uses: actions/checkout@v2
           - name: Set up JDK 1.8
             uses: actions/setup-java@v1

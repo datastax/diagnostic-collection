@@ -37,7 +37,7 @@ setup:
     true
 
 	# Note if you change the cass-operator version, you may also want to change the Cassandra version in the 13-cassandra-cluster-3nodes.yaml file
-	kubectl apply -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
+	kubectl apply -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.4
 	while (! kubectl -n cass-operator get pod | grep -q "cass-operator-") || kubectl -n cass-operator get pod | grep -q "0/1" ; do kubectl -n cass-operator get pod ; echo "waiting 10s…" ; sleep 10 ; done
 	kubectl -n cass-operator apply -f k8s-manifests/13-cassandra-cluster-3nodes.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster1-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
@@ -45,6 +45,6 @@ setup:
 
 teardown:
 	kubectl delete cassdcs --all-namespaces --all
-	kubectl delete -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
+	kubectl delete -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.4
 	kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
 	kind delete cluster --name ds-collector-cluster-vanilla-k8s

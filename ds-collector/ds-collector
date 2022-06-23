@@ -192,7 +192,7 @@ translate_ipaddresses_to_docker_container_ids() {
 translate_ipaddresses_to_k8s_pod_names() {
     declare -a pod_names
     for host in ${cassandraNodes} ; do
-      pod_names+=("$(kubectl -n "$k8s_namespace" get pods -o wide | grep "${host}" | awk -F" " '{print $1}')")
+      pod_names+=("$(kubectl -n "$k8s_namespace" get pods -o=jsonpath="{range .items[*]}{.metadata.name}{' '}{.status.podIPs}{'\n'}{end}" | grep "${host}" | awk -F" " '{print $1}')")
     done
     cassandraNodes="${pod_names[*]}"
 }

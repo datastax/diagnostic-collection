@@ -861,7 +861,7 @@ node_pull_docker() {
 }
 
 node_pull_k8s() {
-  kubectl -n "$k8s_namespace" cp "$hostName:$1" "$baseDir/$(basename $1)"
+  kubectl -n "$k8s_namespace" cp "$hostName:$1" $k8s_container_name_opt "$baseDir/$(basename $1)"
   statusState=$?
   print_status_state
   return $statusState

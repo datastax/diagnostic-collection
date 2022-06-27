@@ -502,7 +502,9 @@ collect_via_rust() {
   export skip_dse_solr
   export script_directory
   if echo $- | grep -q x ; then export COLLECT_INFO_DEBUG=true ; fi
-  ${baseDir}/collect-info "$server_pid" "$artifactDir" 
+  ${baseDir}/collect-info "$server_pid" "$artifactDir"
+  ls -l "${artifactDir}/schema.cql"
+  cat "${artifactDir}/schema.cql"
   statusState=$?
   print_status_state
   echo "completed version ${git_branch} ${git_sha}" >> "${artifactDir}/collect-info.audit.log"
@@ -611,8 +613,8 @@ collect_info_setup() {
     cqlshOpts="$cqlshOpts --ssl"
   fi
   mkdir -p "${artifactDir}/sstable-statistics/"
-  echo "DESCRIBE SCHEMA;" > "$artifactDir/execute_schema.cql"
-  echo "DESCRIBE FULL SCHEMA;" > "$artifactDir/execute_full_schema.cql"
+  echo "DESCRIBE FULL SCHEMA;" > "$artifactDir/execute_schema.cql"
+  echo "DESCRIBE JUNK SCHEMA;" > "$artifactDir/execute_full_schema.cql"
   echo "DESCRIBE CLUSTER;" > "$artifactDir/execute_metadata.cql"
 
   # 'timeout -t SECS' is required on older busybox

@@ -77,7 +77,7 @@ endif
 ifndef COLLECTOR_S3_AWS_SECRET
 	$(error COLLECTOR_S3_AWS_SECRET must also be defined if COLLECTOR_SECRETSMANAGER_KEY is defined)
 endif
-	@(AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager list-secrets 2>/dev/null | grep -q Name ) || { echo >&2 "Failure: aws --region=us-west-2 secretsmanager list-secrets"; exit 1; }
+	@(AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager list-secrets | grep -q Name ) || { echo >&2 "Failure: aws --region=us-west-2 secretsmanager list-secrets"; exit 1; }
 endif
 	@(command -v docker >/dev/null 2>&1) || { echo >&2 "docker needs to be installed"; exit 1; }
 	@(docker info >/dev/null 2>&1) || { echo "docker needs to running"; exit 1; }

@@ -77,7 +77,7 @@ endif
 ifndef COLLECTOR_S3_AWS_SECRET
 	$(error COLLECTOR_S3_AWS_SECRET must also be defined if COLLECTOR_SECRETSMANAGER_KEY is defined)
 endif
-	@(AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager list-secrets 2>/dev/null | grep -q Name ) || { echo >&2 "Failure: aws --region=us-west-2 secretsmanager list-secrets"; exit 1; }
+	@(AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets 2>/dev/null | grep -q Name ) || { echo >&2 "Failure: aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets"; exit 1; }
 endif
 	@(command -v docker >/dev/null 2>&1) || { echo >&2 "docker needs to be installed"; exit 1; }
 	@(docker info >/dev/null 2>&1) || { echo "docker needs to running"; exit 1; }
@@ -92,16 +92,16 @@ ifdef COLLECTOR_SECRETSMANAGER_SECRET
 	@(command -v aws >/dev/null 2>&1) || { echo >&2 "aws needs to be installed"; exit 1; }
 	@(command -v openssl >/dev/null 2>&1) || { echo >&2 "openssl needs to be installed"; exit 1; }
 	$(eval KEY_FILE_NAME := $(shell echo $(subst /,-,$(ISSUE))_secret.key))
-	$(eval SECRET_EXISTS := $(shell AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager list-secrets | grep ${KEY_FILE_NAME} | grep Name))
+	$(eval SECRET_EXISTS := $(shell AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets | grep ${KEY_FILE_NAME} | grep Name))
 	@if [ -z "${SECRET_EXISTS}" ]; then \
 		echo "Since the secret does not exist for $(subst /,-,$(ISSUE)), will generate a new one" ; \
 		openssl rand -base64 256 > ${KEY_FILE_NAME} ; \
 		echo "An encryption key has been generated as ${KEY_FILE_NAME}" ; \
 		echo "I will now add the key to the Secrets Manager" ; \
-		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
+		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
 	else \
 		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS} so will fetch it." ; \
-		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | grep SecretString | cut -d: -f2- | sed 's/^ *"/"/; s/",$/"/' | xargs printf > ${KEY_FILE_NAME} ;\
+		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | grep SecretString | cut -d: -f2- | sed 's/^ *"/"/; s/",$/"/' | xargs printf > ${KEY_FILE_NAME} ;\
 	fi
 endif
 endif

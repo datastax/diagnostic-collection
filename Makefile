@@ -16,7 +16,7 @@ collector: check-env generate-key
 ifdef COLLECTOR_S3_AWS_KEY
 ifdef COLLECTOR_S3_AWS_SECRET
 	@sed -i.bak 's/\#keyId=.*/keyId=\"${COLLECTOR_S3_AWS_KEY}\"/' collector/collector.conf
-	@sed -i.bak 's/\#keySecret=.*/keySecret=\"${COLLECTOR_S3_AWS_SECRET}\"/' collector/collector.conf
+	@sed -i.bak 's|\#keySecret=.*|keySecret=\"${COLLECTOR_S3_AWS_SECRET}\"|' collector/collector.conf
 	@sed -i.bak 's/skipS3=.*/skipS3=\"false\"/' collector/collector.conf
 endif
 endif

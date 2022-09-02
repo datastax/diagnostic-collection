@@ -51,7 +51,8 @@ endif
 	@rm -rf collector/*.bak
 	@rm -rf collector/.idea
 	@chmod ug+x collector/ds-collector
-	@tar cvzf ds-collector.$(subst /,-,$(ISSUE)).tar.gz collector
+	@tar cvf ds-collector.$(subst /,-,$(ISSUE)).tar collector
+	@gzip ds-collector.$(subst /,-,$(ISSUE)).tar
 	@rm -rf collector
 	@echo "A collector tarball has been generated as ds-collector.$(subst /,-,$(ISSUE)).tar.gz"
 

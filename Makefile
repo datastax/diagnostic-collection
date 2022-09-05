@@ -102,7 +102,7 @@ ifdef COLLECTOR_SECRETSMANAGER_SECRET
 		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
 	else \
 		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS} so will fetch it." ; \
-		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | grep SecretString | cut -d: -f2- | sed 's/^ *"/"/; s/",$/"/' | xargs printf > ${KEY_FILE_NAME} ;\
+		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | grep SecretString | cut -d: -f2- | sed 's|^ *"|"|; s|",\o24|"|' | xargs printf > ${KEY_FILE_NAME} ;\
 	fi
 endif
 endif

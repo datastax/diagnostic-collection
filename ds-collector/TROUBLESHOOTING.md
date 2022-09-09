@@ -246,3 +246,15 @@ Or like:
 - Ensure there is sufficient free space available by removing unnecessary files
 - Until [this change](https://github.com/datastax/diagnostic-collection/issues/133) is available, you can edit the `ds-collector` script on the Bastion. Change the `baseDir="/tmp/datastax"` to a directory that can be created (via `mkdir -p`) on the Bastion and the Nodes.
 
+## Error about Malformed IPv6 address when running `nodetool` or `dsetool`
+### Condition:
+You may get an error reported like:
+
+   executing nodetool -h localhost -p 7199 ****  status > nodetool/status.txt... nodetool: Failed to connect to 'localhost:7199' - URISyntaxException: 'Malformed IPv6 address at index 7: rmi://[localhost]:7199'.
+
+### Why it Happens:
+- This is a known problem caused by the introduction of Java8 u332 to Cassandra and DSE environments that do not have a patch containing fix for [CASSANDRA-17581](https://issues.apache.org/jira/browse/CASSANDRA-17581)
+- More detail is available [here](https://datastaxcommunities.force.com/support/s/article/Malformed-IPv6-address-at-index-7-when-running-nodetool-and-dsetool)
+
+### What to do:
+- Until [this change](https://github.com/datastax/diagnostic-collection/issues/152) is available, search for the text `issue/152` in the `ds-collector` script (it appears TWICE), and make the suggested edit in both places.

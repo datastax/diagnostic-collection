@@ -108,9 +108,11 @@ list_cassandra_nodes() {
   nodetoolCmd="nodetool"
   # Check if adding password to nodetool is needed:
   nodetoolCredentials=""
+  # workaround for issue/152: replace previous line with
+  # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"  
   if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
   then
-    nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+    nodetoolCredentials="${nodetoolCredentials} -u $jmxUsername -pw $jmxPassword"
   fi
   jmxOpts=""
   if [ "$jmxSSL" = "true" ]; then
@@ -635,9 +637,11 @@ collect_info_setup() {
 
   # Check if adding password to nodetool is needed:
   nodetoolCredentials=""
+  # workaround for issue/152: replace previous line with
+  # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"
   if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
   then
-    nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+    nodetoolCredentials="${nodetoolCredentials} -u $jmxUsername -pw $jmxPassword"
   fi
 
   server_pid="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"

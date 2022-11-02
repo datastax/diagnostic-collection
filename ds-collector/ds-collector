@@ -879,6 +879,17 @@ node_pull_ssh() {
   return $statusState
 }
 
+node_cleanup() {
+  node_connect "rm -f \"${baseDir}/${targetFile}\""
+  node_connect "rm -f \"${baseDir}/$(basename $configFile)\""
+  node_connect "rm -f \"${baseDir}/${prometheus}\""
+  node_connect "rm -f \"${baseDir}/${dstat}\""
+  node_connect "rm -f \"${baseDir}/collect-info\""
+  for f in ${script_directory}/etc/*; do
+    node_connect "rm -f \"${baseDir}/etc/${f}\""
+  done
+}
+
 # shellcheck disable=SC2086
 read_config() {
   baseMessage="read configuration from file"
@@ -956,6 +967,7 @@ get_info() {
     latestArtifacts=$(node_connect 'cat '$baseDir'/'$artifactFile' 2>&1')
     if echo "${latestArtifacts}" | grep -q "No such file or directory" ; then
         echo collection from $hostName failed to generate any artifacts
+        node_cleanup
         exit 1
     fi
     latestArtifacts=$(echo $latestArtifacts|awk '{print $1}' | tr -d "\n\r")
@@ -969,6 +981,7 @@ get_info() {
       node_pull "${latestArtifacts}"
       statusState=$?
       node_connect "rm -f ${latestArtifacts}"
+      node_cleanup
     fi
     baseMessage="result of datastax_collector from $hostName"
   else

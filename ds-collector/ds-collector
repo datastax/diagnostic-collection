@@ -178,12 +178,17 @@ list_cassandra_nodes() {
 
 translate_ipaddresses_to_docker_container_ids() {
     declare -a container_ids
-    for host in ${cassandraNodes} ; do
-      for container_id in $(docker ps -q) ; do
-          if docker inspect "$container_id" | grep -q "IPAddress\": \"${host}" ; then
-              container_ids+=("${container_id}")
-              break
-          fi
+    docker_containers=$(docker ps -q)
+    declare -a container_inspects
+    for container_id in ${docker_containers} ; do
+      container_inspects+=("$(docker inspect "$container_id")")
+    done
+    for i in ${#docker_containers[@]} ; do
+      for host in ${cassandraNodes} ; do
+        if echo ${container_inspects[i]} | grep -q "IPAddress\": \"${host}" ; then
+            container_ids+=("${docker_containers[i]}")
+            break
+        fi
       done
     done
     cassandraNodes="${container_ids[*]}"

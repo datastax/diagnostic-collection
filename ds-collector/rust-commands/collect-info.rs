@@ -336,6 +336,18 @@ const COMMANDS: &[Cmd<'static>] = &[
         use_sudo: false,
         use_timeout: false,
     },
+    // cqlsh "$(hostname)" $cqlshOpts -e 'DESCRIBE FULL SCHEMA;' > "$artifactDir/schema.cql"
+    // this overrides schema.cql (but won't work in Cassandra verision 1.2 so is optional)
+    Cmd {
+        command: "cqlsh",
+        args: "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -f {artifact_dir}/execute_full_schema.cql",
+        file: "schema.cql",
+        optional: true,
+        skip_flags: "",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
     // cqlsh "$(hostname)" $cqlshOpts -e 'DESCRIBE CLUSTER;' > "$artifactDir/metadata.cql"
     Cmd {
         command: "cqlsh",

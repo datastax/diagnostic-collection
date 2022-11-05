@@ -154,6 +154,11 @@ cqlsh_port=9042
 # Set to DSE tarball install root directory
 #dse_root_dir="/opt/dse"
 
+# DSE configuration directory (with dse.yaml); this will default to:
+#   /etc/dse - package installations
+#   $dse_root_dir/resources/dse/conf - tarball installs
+#dseConfigHome="/etc/cassandra"
+
 # dsetool_options - options to pass to dsetool
 #dt_opts=""
 

@@ -1,10 +1,16 @@
+# the test target will execute once for every test-collector-k8s*.conf.in configuration file found
+CONFIGURATIONS := $(shell ls test-collector-k8s*.conf.in)
+TESTS := $(addprefix test_,${CONFIGURATIONS})
 
-all: setup test teardown
+all: setup ${TESTS} teardown
 
-
-test:
+${TESTS}: test_%:
 	# ds-collector over k8s
-	cp test-collector-k8s.conf.in /tmp/datastax/test-collector-k8s.conf
+	@echo "\n  Testing $* \n"
+	cp $* /tmp/datastax/test-collector-k8s.conf
+	@echo "" >> /tmp/datastax/test-collector-k8s.conf
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> /tmp/datastax/test-collector-k8s.conf
+	@echo "git_sha=$$(git rev-parse HEAD)" >> /tmp/datastax/test-collector-k8s.conf
 	echo "" >> /tmp/datastax/test-collector-k8s.conf
 	echo "cqlshUsername=$$(kubectl -n cass-operator get secret cluster1-superuser -o yaml | grep " username" | awk -F" " '{print $$2}' | base64 -d && echo "")" >> /tmp/datastax/test-collector-k8s.conf
 	echo "cqlshPassword=$$(kubectl -n cass-operator get secret cluster1-superuser -o yaml | grep " password" | awk -F" " '{print $$2}' | base64 -d && echo "")" >> /tmp/datastax/test-collector-k8s.conf

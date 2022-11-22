@@ -79,6 +79,13 @@
 #
 #hostName=""
 
+# if you want nodes to be collected in parallel, specify
+#  all – for collecting all nodes at the same time, fastest and dangerous
+#  rack – not yet supported
+#  none – every node sequentially, the default behaviour
+#
+#parallel_mode="none"
+
 # the provided issue id to reference the artifacts
 # a generic issueId will be generated if not provided here
 #

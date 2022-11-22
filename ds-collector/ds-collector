@@ -929,9 +929,20 @@ get_infos() {
     for host in ${cassandraNodes} ; do
       hostName=$host
       if [[ "$hostName" != \#* ]] && [ "$hostName" ] && [[ ! " ${skipNodes[*]} " =~ " $hostName " ]]; then
-        get_info
+        if [ "$parallel_mode" = "all" ]; then
+          get_info 2>&1 > "${host}.log" &
+        else
+          get_info
+        fi
       fi
     done
+    if [ "$parallel_mode" = "all" ]; then
+      wait
+      for host in ${cassandraNodes} ; do
+        echo "\n === ${host} ===\n"
+        awk -v host="${host}" '{print host " " $0}' "${host}.log"
+      done
+    fi
   else
     get_info
   fi

@@ -1,24 +1,41 @@
+# the test target will execute once for every test-collector-k8s*.conf.in configuration file found
+CONFIGURATIONS_SSH := $(shell ls test-collector-ssh*.conf)
+CONFIGURATIONS_DOCKER := $(shell ls test-collector-docker*.conf)
+TESTS_SSH := $(addprefix test_ssh_,${CONFIGURATIONS_SSH})
+TESTS_DOCKER := $(addprefix test_docker_,${CONFIGURATIONS_DOCKER})
 
-all: setup test teardown
+all: setup ${TESTS_SSH} ${TESTS_DOCKER} teardown
 
-
-test:
+${TESTS_SSH}: test_ssh_%:
 	# ds-collector over SSH
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -p -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -X -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
+	@echo "\n  Testing SSH $* \n"
+	docker exec -t ds-collector-tests_bastion_1 sh -c 'echo "" >> /ds-collector-tests/$*'
+	docker exec -t ds-collector-tests_bastion_1 sh -c 'echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> /ds-collector-tests/$*'
+	docker exec -t ds-collector-tests_bastion_1 sh -c 'echo "git_sha=$$(git rev-parse HEAD)" >> /ds-collector-tests/$*'
+	docker exec -t ds-collector-tests_bastion_1 sh -c 'echo "" >> /ds-collector-tests/$*'
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -p -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -X -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	# test archives exist
 	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
 	# ds-collector over SSH with verbose mode
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -p -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
-	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -X -f /ds-collector-tests/test-collector-ssh.conf -n ds-collector-tests_cassandra-00_1
+	@echo "\n  Testing SSH verbose $* \n"
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -p -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
+	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -X -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	# test archives exist
 	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
+
+${TESTS_DOCKER}: test_docker_%:
 	# ds-collector over docker
-	./collector/ds-collector -T -f test-collector-docker.conf -n ds-collector-tests_cassandra-00_1
-	./collector/ds-collector -T -p -f test-collector-docker.conf -n ds-collector-tests_cassandra-00_1
-	./collector/ds-collector -X -f test-collector-docker.conf -n ds-collector-tests_cassandra-00_1
+	@echo "\n  Testing Docker $* \n"
+	@echo "" >> $*
+	@echo "git_branch=$$(git rev-parse --abbrev-ref HEAD)" >> $*
+	@echo "git_sha=$$(git rev-parse HEAD)" >> $*
+	echo "" >> $*
+	./collector/ds-collector -T -f $* -n ds-collector-tests_cassandra-00_1
+	./collector/ds-collector -T -p -f $* -n ds-collector-tests_cassandra-00_1
+	./collector/ds-collector -X -f $* -n ds-collector-tests_cassandra-00_1
 	# test archives exist
 	if ! ls /tmp/datastax/ | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the docker cluster " ; ls -l /tmp/datastax/ ; exit 1 ; fi
 	

@@ -971,6 +971,7 @@ get_info() {
     node_connect "chmod +x \"${baseDir}/$targetFile\""
     node_connect "chmod +x \"${baseDir}/$dstat\""
     node_connect "chmod +x \"${baseDir}/collect-info\""
+    node_connect "chmod +x \"${baseDir}/etc/*\""
 
     if [ "$sudo_script_on_node" ]; then
       node_connect "sudo $baseDir/$targetFile ${collectionArgs[*]}"

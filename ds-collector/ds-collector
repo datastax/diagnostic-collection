@@ -1068,7 +1068,7 @@ FOREGROUND_OPT="--foreground"
 # It's built from the jmx_exporter/collector
 # it used to be a standalone tool
 
-prometheus="collector-0.11.1-SNAPSHOT.jar"
+prometheus="collector-0.17.2.jar"
 
 dstat="dstat"
 

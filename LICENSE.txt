@@ -1,4 +1,5 @@
 
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -200,3 +201,20 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+
+   ====================================================================
+
+   This product includes subcomponents with separate copyright notices and
+   license terms. Your use of these subcomponents is subject to the terms
+   and conditions of the following licenses.
+
+   This product bundles the JmxScraper from Prometheus' jmx_exporter,
+   Copyright The Prometheus Authors, and made available under
+   the Apache 2.0 License. https://github.com/prometheus/jmx_exporter
+
+   This product bundles the original SDTAT tool,
+   Copyright Dag Wieers, and made available under
+   the GPL-2.0 license. https://github.com/dstat-real/dstat
+
+

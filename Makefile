@@ -12,8 +12,8 @@ collector: check-env generate-key
 	@rm -f collector/collector.conf
 	@mv collector/collector.hosts.in collector/collector.hosts
 	@mv collector/collector.conf.in collector/collector.conf
-	@od -An -vtx1 collector/collector-0.11.1-SNAPSHOT.jar > collector/collector-0.11.1-SNAPSHOT.txt
-	@rm collector/collector-0.11.1-SNAPSHOT.jar
+	@od -An -vtx1 collector/collector-0.17.2.jar > collector/collector-0.17.2.txt
+	@rm collector/collector-0.17.2.jar
 	@sed -i.bak 's/\#issueId=.*/issueId=\"$(subst /,-,$(ISSUE))\"/' collector/collector.conf
 ifdef COLLECTOR_S3_BUCKET
 	@sed -i.bak 's/bucket=.*/bucket=${COLLECTOR_S3_BUCKET}/' collector/ds-collector

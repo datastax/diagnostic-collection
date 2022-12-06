@@ -202,7 +202,7 @@ Other command-line arguments are needed:
 The `xxd` utility is used to convert a text file included with the collector into a `.jar` file that can be used to process metrics.
 
 ### What to do:
-You can install the `xxd` utility on the platform (e.g. it is stand-alone package in Ubuntu, included as part of `vim-common` on RHEL). Alternately, you can download the compiled `.jar` file into the same folder on the Bastion as you have unpacked the `ds-collector` script. The `.jar` can be downloaded from [https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar](https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar).
+You can install the `xxd` utility on the platform (e.g. it is stand-alone package in Ubuntu, included as part of `vim-common` on RHEL). Alternately, you can download the compiled `.jar` file into the same folder on the Bastion as you have unpacked the `ds-collector` script. The `.jar` can be downloaded from [https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.17.2.jar](https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.17.2.jar).
 
 
 ## Error Involving `cpReadable.sh`

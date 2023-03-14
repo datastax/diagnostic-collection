@@ -66,6 +66,7 @@ fn main() {
         cqlsh_password: &env::var("cqlshPassword").unwrap_or("".to_string()),
         timeout_opts: &env::var("timeout_opts").unwrap_or("".to_string()),
         dse_bin_dir: &env::var("dse_bin_dir").unwrap_or("".to_string()),
+        dse_conf_dir: &env::var("dse_conf_dir").unwrap_or("".to_string()),
         dt_opts: &env::var("dt_opts").unwrap_or("".to_string()),
         solr_data_dir: &env::var("solr_data_dir").unwrap_or("".to_string()),
     };
@@ -228,6 +229,7 @@ fn format_args(args: &str, options: &Options, mask: bool) -> String {
         .replace("{cqlsh_host}", options.cqlsh_host)
         .replace("{cqlsh_port}", options.cqlsh_port)
         .replace("{cqlsh_opts}", &format_cqlsh_opts(&options.cqlsh_opts, options.cqlsh_password, mask))
+        .replace("{dse_conf_dir}", options.dse_conf_dir)
         .replace("{dt_opts}", options.dt_opts)
         .replace("{solr_data_dir}", options.solr_data_dir)
 }
@@ -309,6 +311,7 @@ struct Options<'a> {
     cqlsh_password: &'a str,
     timeout_opts: &'a str,
     dse_bin_dir: &'a str,
+    dse_conf_dir: &'a str,
     dt_opts: &'a str,
     solr_data_dir: &'a str,
 }
@@ -1116,11 +1119,10 @@ const COMMANDS: &[Cmd<'static>] = &[
 
     // DSE //
 
-    // cp "$configHome/dse.yaml" "$artifactDir/conf/dse/"
-    // use cat so to lazy create destination directory
+    // cp "$dse_conf_dir/dse.yaml" "$artifactDir/conf/dse/"
     Cmd {
         command: "cat",
-        args: "{config_home}/dse.yaml",
+        args: "{dse_conf_dir}/dse.yaml",
         file: "conf/dse/dse.yaml",
         optional: true,
         skip_flags: "skip_dse",
@@ -1140,7 +1142,6 @@ const COMMANDS: &[Cmd<'static>] = &[
         use_timeout: false,
     },
     // cp "$logHome/audit/dropped-events.log" "$artifactDir/logs/cassandra/audit"
-    // use cat so to lazy create destination directory
     Cmd {
         command: "cat",
         args: "{log_home}/audit/dropped-events.log {artifact_dir}/",

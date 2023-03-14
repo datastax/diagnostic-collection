@@ -498,6 +498,7 @@ collect_via_rust() {
   export cqlshPassword
   export timeout_opts="$FOREGROUND_OPT $TIMEOUT_OPT"
   export dse_bin_dir
+  export dse_conf_dir
   export dt_opts
   export no_nodesyncrate
   export solr_data_dir

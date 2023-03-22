@@ -104,6 +104,14 @@ connection_tests() {
 # shellcheck disable=SC2086
 list_cassandra_nodes() {
   statusState=0
+  pathCommand=""
+  # pull the path - if prepend path or add path have been set, includes them as a part of the path for the 
+  # nodetool command. We pull the remote path since using an echo PATH $PATH followed by a grep / sed - this ensures that
+  # any motd type banner does not prevent us getting to the path, and even if the word PATH appears in the banner, the
+  # sed will match to the final entry (the echo command)
+  remotePath=$(node_connect 'echo PATH \$PATH' | grep PATH | sed -n -e 's/^.*PATH //p')
+  pathCommand="export PATH=$prependPath:$remotePath:$addPath;"
+
   # change this if there's an alias, or a full path needs to be specified
   nodetoolCmd="nodetool"
   # Check if adding password to nodetool is needed:
@@ -136,7 +144,7 @@ list_cassandra_nodes() {
       echo "Using $(hostname) to connect to JMX..."
     fi
   fi
-  cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
+  cmd="set -o pipefail ; ${pathCommand} ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
   cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
   statusState=$?
   if [ "$statusState" = "0" ]; then

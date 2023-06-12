@@ -154,7 +154,7 @@ cd /tmp/
 tar -xvf <path-to-bundle>/<bundle>.tar.gz
 mv collector datastax
 cd datastax
-wget https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.11.1-SNAPSHOT.jar
+wget https://github.com/datastax/diagnostic-collection/raw/master/ds-collector/collector-0.17.2.jar
 # edit collector.conf, then run the ds-collector in client-mode
 ./ds-collector -C -f collector.conf 
 # if the node has internet access, upload directly to s3

@@ -201,6 +201,16 @@ Troubleshooting
 ===============
 This section moved to [TROUBLESHOOTING.md](TROUBLESHOOTING.md), and expanded.
 
+* If the script fails when attempting to run the `cqlsh` command due to an incorrect host address, an additional configuration item can be uncommented and used to supply a suitable host value.  The default behaviour of the setting is that a node will use the `hostname` command to provide the address to use as it is run on the node. Problems occur if this hostname does not resolve to the IP address that the node is listening for connections on. An alternative command can be used instead, which is supplied via configuration.
+
+An example of a replacement when running on AWS to use the local private IP is:
+
+```
+cqlsh_host="$(curl http://169.254.169.254/latest/meta-data/local-ipv4)"
+```
+
+This will ensure that each node uses it's own internal IP address as the `cqlsh` host address.
+
 
 What is Collected
 =================

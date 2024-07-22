@@ -1,8 +1,20 @@
 #!/bin/bash
 #
-# ds-collector
 #
-# Collect artifacts and ship for analysis
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+# ds-collector :: Collect artifacts and ship for analysis
 #
 # The following are expected to be installed on the Cassandra/DSE nodes:
 #    blockdev
@@ -31,7 +43,7 @@
 #    uptime
 #
 # On a debian/ubuntu server these can be installed by running:
-#  `apt-get install -y procps  ethtool  lsof  net-tools  sysstat pciutils ntp ntpstat numactl lvm2 curl`
+#  `apt-get install -y procps  ethtool iproute2 lsof  net-tools  sysstat pciutils ntp ntpstat numactl lvm2 curl`
 #
 
 
@@ -165,7 +177,7 @@ list_cassandra_nodes() {
     required_basedir_space="$((${node_count} * 500000))"
     # detect if df supports --portability
     DF_OPT=""
-    ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
+    ( ( df --help 2>/dev/null ) | grep -q "\-\-portability" ) && DF_OPT="--portability"
     [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
     # also grab the cluster name
@@ -966,7 +978,15 @@ get_info() {
     node_push "$0" "$baseDir/$targetFile"
     node_push "${script_directory}/${prometheus}" "$baseDir/${prometheus}"
     node_push "${script_directory}/$dstat" "$baseDir/$dstat"
-    node_push "${script_directory}/collect-info" "$baseDir/collect-info"
+    collect_info_binary="collect-info.x86_64-unknown-linux-musl"
+    arch="$(node_connect 'arch')"
+    if ( command -v rustc >/dev/null 2>&1 ) && [ "aarch64-apple-darwin" == "$(rustc -vV | grep host | cut -d' ' -f2)" ] && test -f "${script_directory}/collect-info.aarch64-apple-darwin" ; then
+        echo "Jumpbox/Bastion is aarch64-apple-darwin and collector was built on aarch64-apple-darwin.  Assuming nodes are aarch64-apple-darwin too.  Is this is not true, delete the collect-info.aarch64-apple-darwin file and execute again."
+        collect_info_binary="collect-info.aarch64-apple-darwin"
+    elif [[ ${arch} =~ "arm" ]] || [[ ${arch} =~ "aarch64" ]] ; then
+        collect_info_binary="collect-info.aarch64-unknown-linux-musl"
+    fi
+    node_push "${script_directory}/${collect_info_binary}" "${baseDir}/collect-info"
 
     node_connect "mkdir -p $baseDir/etc"
     for f in ${script_directory}/etc/*; do

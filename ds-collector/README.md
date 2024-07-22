@@ -1,7 +1,7 @@
-DataStax Diagnostic Collector for Apache Cassandra&trade; and DataStax Enterprise (DSE)&trade;
-===============================================================================================
+Diagnostic Collector for Apache Cassandra&trade;, DSE&trade;, HCD&trade;, …
+==============================================================================
 
-The Diagnostic Collector bundle is used to collect diagnostic snapshots over all nodes in an Apache Cassandra or DataStax Enterprise cluster. 
+The Diagnostic Collector bundle is used to collect diagnostic snapshots (support bundles) over all nodes in an Apache Cassandra, or Cassandra based product, cluster.
 
 It can be run on Linux or Mac server that has ssh/docker/k8s access to the nodes in the cluster. It cannot be directly run on a node in the cluster.
 

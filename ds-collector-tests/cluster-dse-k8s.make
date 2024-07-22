@@ -30,7 +30,6 @@ setup:
 	tar -xvf ../ds-collector.TEST-cluster-dse-k8s-*.tar.gz
 	rm collector/collector.conf
 	cp TEST-cluster-dse-k8s-*_secret.key collector/ || true
-	test -f collector/collect-info
 	# setup k8s cluster
 	cp k8s-manifests/01-kind-config.yaml /tmp/datastax/01-kind-config.yaml
 	kind create cluster --name ds-collector-cluster-dse-k8s --config /tmp/datastax/01-kind-config.yaml
@@ -46,7 +45,7 @@ setup:
     true
 
 	# Note if you change the cass-operator version, you may also want to change the DSE version in the example-cassdc-minimal-dse.yaml file
-	kubectl apply -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
+	kubectl apply --force-conflicts --server-side -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.22.0
 	while (! kubectl -n cass-operator get pod | grep -q "cass-operator-") || kubectl -n cass-operator get pod | grep -q "0/1" ; do kubectl -n cass-operator get pod ; echo "waiting 10s…" ; sleep 10 ; done
 	kubectl -n cass-operator apply -f k8s-manifests/example-cassdc-minimal-dse.yaml
 	while (! kubectl -n cass-operator get pod | grep -q "cluster2-dc1-default-sts-0") || kubectl -n cass-operator get pod | grep -q "0/2" || kubectl -n cass-operator get pod | grep -q "1/2" ; do kubectl -n cass-operator get pod ; echo "waiting 60s…" ; sleep 60 ; done
@@ -54,6 +53,6 @@ setup:
 
 teardown:
 	kubectl delete cassdcs --all-namespaces --all
-	kubectl delete -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.10.3
+	kubectl delete -k github.com/k8ssandra/cass-operator/config/deployments/default?ref=v1.22.0
 	kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.7.1/cert-manager.yaml
 	kind delete cluster --name ds-collector-cluster-dse-k8s

@@ -3,8 +3,11 @@
 collector: check-env generate-key
 	@cp -R ds-collector/ collector
 	@rm -f collector/collect-info
-	@cd collector ; docker run --rm -v $$PWD:/volume -w /volume -t clux/muslrust rustc --target x86_64-unknown-linux-musl rust-commands/*.rs ; cd -
-	@test -f collector/collect-info
+	@cd collector ; if ( command -v rustc >/dev/null 2>&1 ) && [ "aarch64-apple-darwin" = "$(rustc -vV | grep host | cut -d' ' -f2)" ] ; then rustc rust-commands/*.rs ; mv collect-info collect-info.aarch64-apple-darwin ; fi ; cd -
+	@cd collector ; docker run --rm --platform linux/arm64 -v /usr/bin/qemu-aarch64-static:/usr/bin/qemu-aarch64-static -v $$PWD:/volume -w /volume -t clux/muslrust rustc --target aarch64-unknown-linux-musl rust-commands/*.rs ; mv collect-info collect-info.aarch64-unknown-linux-musl ; cd -
+	@cd collector ; docker run --rm --platform linux/amd64 -v $$PWD:/volume -w /volume -t clux/muslrust rustc --target x86_64-unknown-linux-musl rust-commands/*.rs ; mv collect-info collect-info.x86_64-unknown-linux-musl ; cd -
+	@test -f collector/collect-info.aarch64-unknown-linux-musl
+	@test -f collector/collect-info.x86_64-unknown-linux-musl
 	@rm -f collector/collector.hosts
 	@rm -f collector/collector.conf
 	@mv collector/collector.hosts.in collector/collector.hosts

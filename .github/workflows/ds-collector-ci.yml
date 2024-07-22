@@ -25,26 +25,29 @@ jobs:
     - name: Test ds-collector
       working-directory: ds-collector-tests
       run: |
+        sudo apt-get install -y  binfmt-support qemu qemu-user-static
         echo "Testing ds-collector"
         make -f cluster-vanilla-ssh-docker.make
 
-  test-collector-ssh-docker-macos:
-          runs-on: macos-11
-
-          steps:
-          - uses: docker-practice/actions-setup-docker@1.0.11
-          - uses: actions/checkout@v2
-          - name: Set up JDK 1.8
-            uses: actions/setup-java@v1
-            with:
-              java-version: 1.8
-
-          - name: Test ds-collector
-            working-directory: ds-collector-tests
-            run: |
-              brew install coreutils
-              echo "Testing ds-collector"
-              make -f cluster-one-node-vanilla-ssh-docker.make
+# TODO – fix when gha offers any arm64 runner (that can run docker)
+#
+#  test-collector-ssh-docker-macos:
+#          runs-on: macos-14
+#
+#          steps:
+#          - uses: docker-practice/actions-setup-docker@1.0.11
+#          - uses: actions/checkout@v2
+#          - name: Set up JDK 1.8
+#            uses: actions/setup-java@v1
+#            with:
+#              java-version: 1.8
+#
+#          - name: Test ds-collector
+#            working-directory: ds-collector-tests
+#            run: |
+#              brew install coreutils
+#              echo "Testing ds-collector"
+#              make -f cluster-one-node-vanilla-ssh-docker.make
 
   test-collector-k8s-cassandra:
     runs-on: ubuntu-latest
@@ -59,6 +62,7 @@ jobs:
     - name: Test ds-collector
       working-directory: ds-collector-tests
       run: |
+        sudo apt-get install -y  binfmt-support qemu qemu-user-static
         echo "Testing ds-collector"
         make -f cluster-vanilla-k8s.make
 
@@ -75,6 +79,7 @@ jobs:
     - name: Test ds-collector
       working-directory: ds-collector-tests
       run: |
+        sudo apt-get install -y  binfmt-support qemu qemu-user-static
         echo "Testing ds-collector"
         make -f cluster-dse-k8s.make
 

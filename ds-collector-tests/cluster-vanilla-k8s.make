@@ -27,7 +27,6 @@ setup:
 	tar -xvf ../ds-collector.TEST-cluster-vanilla-k8s-*.tar.gz
 	rm collector/collector.conf
 	cp TEST-cluster-vanilla-k8s-*_secret.key collector/ || true
-	test -f collector/collect-info
 	# setup k8s cluster
 	cp k8s-manifests/01-kind-config.yaml /tmp/datastax/01-kind-config.yaml
 	kind create cluster --name ds-collector-cluster-vanilla-k8s --config /tmp/datastax/01-kind-config.yaml

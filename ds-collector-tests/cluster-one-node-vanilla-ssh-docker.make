@@ -47,7 +47,6 @@ setup:
 	tar -xvf ../ds-collector.TEST-cluster-one-node-vanilla-ssh-docker-*.tar.gz
 	rm collector/collector.conf
 	cp TEST-cluster-one-node-vanilla-ssh-docker-*_secret.key collector/ || true
-	test -f collector/collect-info
 	# setup single node docker cluster and bastion
 	docker-compose up --build -d cassandra-00 bastion
 	docker-compose ps

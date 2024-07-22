@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+#
+# Copyright DataStax, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+from collections import namedtuple
+
+DRY_RUN = False
+
+Options = namedtuple('Options', [
+    'base_dir', 'artifact_dir', 'skip_sudo', 'log_home', 'data_dir',
+    'config_home', 'cassandra_pid', 'prometheus_jar', 'jmx_port', 'jmx_username',
+    'jmx_password', 'jmx_ssl', 'jmx_host', 'nodetool_credentials', 'cqlsh_host',
+    'cqlsh_port', 'cqlsh_opts', 'cqlsh_password', 'timeout_opts', 'dse_bin_dir',
+    'dse_conf_dir', 'dt_opts', 'solr_data_dir'
+])
+
+Cmd = namedtuple('Cmd', [
+    'command', 'args', 'file', 'optional', 'skip_flags', 'use_stdout',
+    'use_sudo', 'use_timeout'
+])
+
+COMMANDS = [
+    Cmd("cqlsh", "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -f {artifact_dir}/execute_schema.cql", "schema.cql", False, "", True, False, False),
+    Cmd("cqlsh", "{cqlsh_host} {cqlsh_port} {cqlsh_opts} -f {artifact_dir}/execute_metadata.cql", "driver/metadata.txt", True, "", True, False, False),
+    Cmd("java", "-cp {prometheus_jar} io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://{jmx_host}:{jmx_port}/jmxrmi {jmx_username} {jmx_password}", "metrics.jmx", False, "jmxSSL", True, False, False),
+    Cmd("uname", "-a", "os/uname.txt", True, "", True, False, False),
+    Cmd("sar", "-B", "os/sar.txt", True, "", True, False, False),
+    Cmd("lsblk", "", "os/lsblk.txt", True, "", True, False, False),
+    Cmd("lsblk", "-oname,kname,fstype,mountpoint,label,ra,model,size,rota", "os/lsblk_custom.txt", True, "", True, False, False),
+    Cmd("lspci", "", "os/lspci.txt", True, "", True, False, False),
+    Cmd("hostname", "-f", "os/hostname.txt", True, "", True, False, False),
+    Cmd("ps", "auxww", "os/ps-aux.txt", True, "", True, False, False),
+    Cmd("uptime", "", "os/uptime.txt", True, "", True, False, False),
+    Cmd("date", "", "os/date.txt", True, "", True, False, False),
+    Cmd("ifconfig", "", "os/ifconfig.txt", True, "", True, False, False),
+    Cmd("lscpu", "", "os/lscpu.txt", True, "", True, False, False),
+    Cmd("ss", "-at", "os/ss.txt", True, "", True, False, False),
+    Cmd("top", "-n 10 -b -d 1", "os/top.txt", True, "skipStat", True, False, False),
+    Cmd("free", "-m", "os/free.txt", True, "", True, False, False),
+    Cmd("vmstat", "2 30", "os/vmstat.txt", True, "skipStat", True, False, False),
+    Cmd("env", "-u jmxPassword -u nodetoolCredentials -u cqlshPassword -u cqlsh_opts -u dt_opts -u SSHPASS", "os/env.txt", True, "", True, False, False),
+    Cmd("java", "-version", "os/java-version.txt", False, "", False, False, False),
+    Cmd("sudo", "-l", "os/sudo-l.txt", True, "skipSudo", True, False, False),
+    Cmd("cat", "/sys/kernel/mm/transparent_hugepage/enabled", "os/transparent_hugepage-enabled.txt", True, "", True, False, False),
+    Cmd("cat", "/sys/kernel/mm/transparent_hugepage/defrag", "os/transparent_hugepage-defrag.txt", True, "", True, False, False),
+    Cmd("numactl", "--hardware", "os/numactl-hardware.txt", True, "", True, False, False),
+    Cmd("cp", "-r /proc/cpuinfo /proc/meminfo /proc/interrupts /proc/version /etc/fstab /etc/security/limits.conf {artifact_dir}/os/", "", True, "", True, False, False),
+    Cmd("cp", "-r /etc/security/limits.d {artifact_dir}/os/", "", True, "", True, False, False),
+    Cmd("find", "/etc/ -name *-release -exec cat {} +", "os/os.txt", True, "", True, False, False),
+    Cmd("curl", "--connect-timeout 10 -s http://169.254.169.254/latest/meta-data/instance-type", "cloud/instance_type.txt", True, "", True, True, False),
+    Cmd("curl", "--connect-timeout 10 -s http://169.254.169.254/latest/meta-data/placement/availability-zone", "cloud/az_info.txt", True, "", True, True, False),
+    Cmd("ec2metadata", "", "cloud/aws-metadata.txt", True, "", True, True, False),
+    Cmd("curl", "--connect-timeout 10 -s http://metadata.google.internal/computeMetadata/v1/instance/", "cloud/google.txt", True, "", True, True, False),
+    Cmd("slabtop", "-o -s c", "os/slaptop.txt", True, "", True, True, False),
+    Cmd("sysctl", "-a", "os/sysctl.txt", True, "", True, True, False),
+    Cmd("blockdev", "--report", "os/blockdev-report.txt", True, "", True, True, False),
+    Cmd("lsof", "-i -P", "os/lsof-cassandra.txt", True, "", True, True, False),
+    Cmd("netstat", "-nr", "os/netstat-nr.txt", True, "", True, True, False),
+    Cmd("netstat", "-lptu", "os/netstat-lptu.txt", True, "", True, True, False),
+    Cmd("netstat", "-tulpn", "os/netstat-tulpn.txt", True, "", True, True, False),
+    Cmd("{base_dir}/etc/cpReadable.sh", "{log_home} {artifact_dir}/logs", "", False, "", True, False, False),
+    Cmd("{base_dir}/etc/cpReadable.sh", "{config_home} {artifact_dir}/conf", "", False, "", True, False, False),
+    Cmd("netstat", "--statistics", "network/netstat-summary.txt", True, "", True, False, False),
+    Cmd("ntpstat", "", "network/ntpstat.txt", True, "", True, False, False),
+    Cmd("ntpq", "-p", "network/ntpq-p.txt", True, "", True, False, False),
+    Cmd("chronyc", "tracking", "network/chrony/tracking.txt", True, "", True, False, False),
+    Cmd("chronyc", "sources -v", "network/chrony/sources.txt", True, "", True, False, False),
+    Cmd("chronyc", "sourcestats -v", "network/chrony/sourcestats.txt", True, "", True, False, False),
+    Cmd("ifconfig", "", "network/ifconfig.txt", True, "", True, False, False),
+    Cmd("df", "-h", "storage/df-size.txt", True, "", True, False, True),
+    Cmd("df", "-i", "storage/df-inode.txt", True, "", True, False, True),
+    Cmd("iostat", "-dmx 5 24", "storage/iostat-dmx.txt", True, "skipStat", True, True, False),
+    Cmd("{base_dir}/dstat", "-am --output {artifact_dir}/storage/dstat.txt 1 60", "", True, "skipStat", True, False, False),
+    Cmd("pvdisplay", "", "storage/pvdisplay.txt", True, "", True, True, False),
+    Cmd("vgdisplay", "", "storage/vgdisplay.txt", True, "", True, True, False),
+    Cmd("lvdisplay", "-a", "storage/lvdisplay.txt", True, "", True, True, False),
+    Cmd("lvs", "-a", "storage/lvs.txt", True, "", True, True, False),
+    Cmd("jcmd", "{cassandra_pid} VM.system_properties", "java_system_properties.txt", True, "", True, True, False),
+    Cmd("jcmd", "{cassandra_pid} VM.command_line", "java_command_line.txt", True, "", True, True, False),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} status", "nodetool/status.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} tpstats", "nodetool/tpstats.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} cfstats", "nodetool/cfstats.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} info", "nodetool/info.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} ring", "nodetool/ring.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} version", "nodetool/version.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} proxyhistograms", "nodetool/proxyhistograms.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} compactionstats", "nodetool/compactionstats.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} describecluster", "nodetool/describecluster.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} getcompactionthroughput", "nodetool/getcompactionthroughput.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} getstreamthroughput", "nodetool/getstreamthroughput.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} gossipinfo", "nodetool/gossipinfo.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} netstats", "nodetool/netstats.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} statusbinary", "nodetool/statusbinary.txt", True, "", True, False, True),
+    Cmd("nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} statusthrift", "nodetool/statusthrift.txt", True, "", True, False, True),
+    Cmd("find", "{data_dir} -maxdepth 3 -name *-Statistics.db -exec cp --parents {} {artifact_dir}/sstable-statistics/ ;", "", True, "skip_db_statistics", True, False, False),
+    Cmd("cat", "{dse_conf_dir}/dse.yaml", "conf/dse/dse.yaml", True, "skip_dse", True, True, False),
+    Cmd("{base_dir}/etc/cpReadable.sh", "/etc/default/dse {artifact_dir}/conf/dse/", "", True, "skip_dse", True, False, False),
+    Cmd("cat", "{log_home}/audit/dropped-events.log {artifact_dir}/", "logs/cassandra/audit/dropped-events.log", True, "skip_dse", True, True, False),
+    Cmd("{dse_bin_dir}dsetool", "{dt_opts} status", "dsetool/status.txt", True, "skip_dse", True, False, True),
+    Cmd("{dse_bin_dir}dsetool", "{dt_opts} ring", "dsetool/ring.txt", True, "skip_dse", True, False, True),
+    Cmd("{dse_bin_dir}dsetool", "{dt_opts} insights_config --show_config", "dsetool/insights_config.txt", True, "skip_dse", True, False, True),
+    Cmd("{dse_bin_dir}dsetool", "{dt_opts} insights_filters --show_filters", "dsetool/insights_filters.txt", True, "skip_dse", True, False, True),
+    Cmd("{dse_bin_dir}dsetool", "{dt_opts} perf cqlslowlog recent_slowest_queries", "dsetool/slowest_queries.txt", True, "skip_dse", True, False, True),
+    Cmd("{dse_bin_dir}nodetool", "-h {jmx_host} -p {jmx_port} {nodetool_credentials} {nodetool_ssl} nodesyncservice getrate", "nodetool/nodesyncrate.txt", True, "skip_dse no_nodesyncrate", True, False, True),
+    Cmd("du", "-s -- {solr_data_dir}/", "solr/cores-sizes.txt", True, "skip_dse skip_dse_solr", True, False, True),
+]
+
+def main():
+    args = sys.argv
+    if len(args) != 3:
+        raise Exception(f"Unexpected number of arguments ({len(args)}), should be 2 ($server_pid $artifactDir)")
+
+    options = Options(
+        base_dir=os.getenv('baseDir', '/tmp/datastax'),
+        artifact_dir=args[2],
+        skip_sudo=bool(str(os.getenv('skipSudo', 'false')).lower() in ['true', '1', 't', 'y', 'yes']),
+        log_home=os.getenv('logHome', '/var/log/cassandra'),
+        data_dir=os.getenv('data_dir', ''),
+        config_home=os.getenv('configHome', '/etc/cassandra'),
+        cassandra_pid=args[1],
+        prometheus_jar=os.getenv('prometheus_jar', 'none.jar'),
+        jmx_port=os.getenv('jmxPort', '7199'),
+        jmx_username=os.getenv('jmxUsername', ''),
+        jmx_password=os.getenv('jmxPassword', ''),
+        jmx_ssl=bool(str(os.getenv('jmxSSL', 'false')).lower() in ['true', '1', 't', 'y', 'yes']),
+        jmx_host=os.getenv('jmxHost', ''),
+        nodetool_credentials=os.getenv('nodetoolCredentials', ''),
+        cqlsh_host=os.getenv('cqlsh_host', 'localhost'),
+        cqlsh_port=os.getenv('cqlsh_port', '9042'),
+        cqlsh_opts=os.getenv('cqlshOpts', ''),
+        cqlsh_password=os.getenv('cqlshPassword', ''),
+        timeout_opts=os.getenv('timeout_opts', ''),
+        dse_bin_dir=os.getenv('dse_bin_dir', ''),
+        dse_conf_dir=os.getenv('dse_conf_dir', ''),
+        dt_opts=os.getenv('dt_opts', ''),
+        solr_data_dir=os.getenv('solr_data_dir', ''),
+    )
+
+    check_all_commands(options)
+    execute_all_commands(options)
+
+def check_all_commands(options):
+    print("Checking commands required to collect information…")
+    checked_commands = set()
+
+    for cmd in COMMANDS:
+        cmd_str = format_command(cmd.command, options)
+        if cmd_str not in checked_commands:
+            checked_commands.add(cmd_str)
+            sudo_str = "sudo " if cmd.use_sudo and not options.skip_sudo else ""
+
+            print(f"\tlooking for `{sudo_str}{cmd_str}`… ", end='', flush=True)
+
+            result = check_command(cmd, options)
+            if result[0]:
+                print(f"FOUND at {result[1].replace(chr(92), '')}")
+            else:
+                print("missing")
+                if not cmd.optional:
+                    print(f"FATAL: {cmd_str} not found and is not optional for the collector")
+
+    print(" …OK")
+
+def execute_all_commands(options):
+    print("Collecting OS information… ")
+    auditor = create_auditor_file(options)
+
+    for cmd in COMMANDS:
+        cmd_str = format_command(cmd.command, options)
+        args_str = format_args(cmd.args, options, True)
+
+        if not cmd.optional or check_command(cmd, options)[0]:
+            print(f"\texecuting `{cmd_str} {args_str} > {cmd.file}`… ", end='', flush=True)
+
+            if not should_skip_command(cmd):
+                if DRY_RUN or execute_command(cmd, options, auditor):
+                    print("OK")
+                else:
+                    print("failed")
+                    assert cmd.optional
+            else:
+                print("skipped")
+        else:
+            print(f"\tskipping  `{cmd_str} {args_str}`")
+
+    print(" …OK")
+
+def create_auditor_file(options):
+    auditor_str = f"{options.artifact_dir}/collect-info.audit.log"
+    auditor_path = Path(auditor_str)
+    auditor_path.parent.mkdir(parents=True, exist_ok=True)
+    return open(auditor_path, 'w')
+
+def should_skip_command(cmd):
+    skip = False
+    for skip_flag in cmd.skip_flags.split():
+        val = os.getenv(skip_flag)
+        skip |= val is not None and bool(str(val).lower() in ['true', '1', 't', 'y', 'yes'])
+    return skip
+
+def check_command(cmd, options):
+    cmd_str = format_command(cmd.command, options)
+    check_cmd = create_check_command(cmd, options)
+    result = subprocess.run([check_cmd[0], '-c', f"command -v {cmd_str}"], capture_output=True, text=True)
+    return result.returncode == 0, result.stdout
+
+def create_check_command(cmd, options):
+    if cmd.use_sudo and not options.skip_sudo:
+        return 'sudo', 'sudo sh'
+    return 'sh', 'sh'
+
+def execute_command(cmd, options, auditor):
+    assert not DRY_RUN
+    cmd_str = format_command(cmd.command, options)
+    args_str = format_args(cmd.args, options, True)
+
+    auditor.write(f"{cmd_str} {args_str} > {cmd.file}\n")
+
+    command = create_command(cmd_str, cmd, options)
+    if cmd.args:
+        command.extend(format_args(cmd.args, options, False).split())
+
+    assert cmd.file or not cmd.use_sudo, f"use_sudo cannot be used when cmd.file is empty (`{cmd_str} {args_str}`)"
+    output_file = create_command_output_file(options.artifact_dir, cmd.file)
+    with open(output_file, 'w') if output_file else None as f:
+        if cmd.use_stdout:
+            result = subprocess.run(command, stdout=f)
+        else:
+            result = subprocess.run(command, stderr=f)
+
+    return result.returncode == 0
+
+def format_command(cmd, options):
+    return cmd.format(base_dir=options.base_dir, dse_bin_dir=options.dse_bin_dir)
+
+def format_args(args, options, mask):
+    return args.format(
+        artifact_dir=options.artifact_dir,
+        log_home=options.log_home,
+        data_dir=options.data_dir,
+        config_home=options.config_home,
+        cassandra_pid=options.cassandra_pid,
+        prometheus_jar=options.prometheus_jar,
+        jmx_host=options.jmx_host,
+        jmx_port=options.jmx_port,
+        jmx_username=options.jmx_username,
+        jmx_password=format_jmx_password(options.jmx_password, mask),
+        nodetool_ssl=nodetool_ssl(options.jmx_ssl),
+        nodetool_credentials=format_jmx_password(options.nodetool_credentials, mask),
+        cqlsh_host=options.cqlsh_host,
+        cqlsh_port=options.cqlsh_port,
+        cqlsh_opts=format_cqlsh_opts(options.cqlsh_opts, options.cqlsh_password, mask),
+        dse_conf_dir=options.dse_conf_dir,
+        dt_opts=options.dt_opts,
+        solr_data_dir=options.solr_data_dir
+    )
+
+def nodetool_ssl(jmx_ssl):
+    return "--ssl" if jmx_ssl else ""
+
+def format_jmx_password(jmx_password, mask):
+    return "****" if mask else jmx_password
+
+def format_cqlsh_opts(cqlsh_opts, cqlsh_password, mask):
+    return cqlsh_opts.replace(cqlsh_password, "****") if mask else cqlsh_opts
+
+def create_command(cmd_str, cmd, options):
+    command = []
+    if cmd.use_sudo and not options.skip_sudo:
+        command.append("sudo")
+        if cmd.use_timeout:
+            command.append("timeout")
+            command.extend(options.timeout_opts.split())
+        command.append(cmd_str)
+    else:
+        if cmd.use_timeout:
+            command.append("timeout")
+            command.extend(options.timeout_opts.split())
+            command.append(cmd_str)
+        else:
+            command.append(cmd_str)
+    return command
+
+def create_command_output_file(artifact_dir, cmd_file):
+    if not cmd_file:
+        return None
+    path_str = f"{artifact_dir}/{cmd_file}"
+    path = Path(path_str)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+if __name__ == "__main__":
+    main()

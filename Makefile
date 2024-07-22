@@ -2,9 +2,6 @@
 
 collector: check-env generate-key
 	@cp -R ds-collector/ collector
-	@rm -f collector/collect-info
-	@cd collector ; docker run --rm -v $$PWD:/volume -w /volume -t clux/muslrust rustc --target x86_64-unknown-linux-musl rust-commands/*.rs ; cd -
-	@test -f collector/collect-info
 	@rm -f collector/collector.hosts
 	@rm -f collector/collector.conf
 	@mv collector/collector.hosts.in collector/collector.hosts

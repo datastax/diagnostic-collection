@@ -8,5 +8,4 @@ hs_err_pid*
 ds-collector.tar.gz
 ds-collector.*.tar.gz
 collector/
-ds-collector/collect-info
 ds-collector/logs

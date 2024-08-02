@@ -21,6 +21,7 @@
 #    date
 #    df
 #    ethtool
+#    gzip
 #    hostname
 #    iostat
 #    ip
@@ -43,7 +44,7 @@
 #    uptime
 #
 # On a debian/ubuntu server these can be installed by running:
-#  `apt-get install -y procps  ethtool iproute2 lsof  net-tools  sysstat pciutils ntp ntpstat numactl lvm2 curl`
+#  `apt-get install -y procps  ethtool gzip iproute2 lsof  net-tools  sysstat pciutils ntp ntpstat numactl lvm2 curl`
 #
 
 
@@ -276,6 +277,10 @@ bastion_checks() {
   fi
   command -v ip >/dev/null 2>&1 || command -v ifconfig >/dev/null 2>&1 || { echo >&2 "ip or ifconfig needs to be installed"; exit 1; }
   command -v timeout >/dev/null 2>&1 || { echo >&2 "timeout needs to be installed (on macos do 'brew install coreutils')"; exit 1; }
+
+  if [ -n "${cqlshUsername}" ] ; then
+    [ -n "${cqlshPassword}" ] || { echo >&2 "The cqlsh username is configured but not the password" ; exit 1 ; }
+  fi
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
@@ -283,7 +288,7 @@ bastion_checks() {
   ! [ "$use_k8s" = "true" ] || command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl needs to be installed"; exit 1; }
   # detect if df supports --portability
   DF_OPT=""
-  ( df --help | grep -q "\-\-portability" ) && DF_OPT="--portability"
+  ( ( df --help 2>/dev/null ) | grep -q "\-\-portability" ) && DF_OPT="--portability"
   [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "${script_directory}/${prometheus}" ]] || command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
@@ -540,14 +545,14 @@ collect_ethernet_device() {
   sub_dir "network"
   # legacy eth network names
   for ethernet_device in eth{0..9} ;do
-    ip a show $ethernet_device >> /dev/null 2>&1
+    ip a show $ethernet_device > /dev/null 2>&1
     if [ "$?" = "0" ] ; then
       ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
     fi
   done
   # udev en network names
   for ethernet_device in $(ip -4 a | grep ": en" | cut -d":" -f2) ;do
-    ip a show $ethernet_device >> /dev/null 2>&1
+    ip a show $ethernet_device > /dev/null 2>&1
     if [ "$?" = "0" ] ; then
       ethtool -i $ethernet_device > "$artifactSubDir/ethtool-$ethernet_device.txt"
     fi
@@ -628,7 +633,9 @@ collect_info_setup() {
   update_path
   update_env
 
-  cqlshOpts="${cqlshOpts} --username=$cqlshUsername --password=$cqlshPassword"
+  if [ -n "${cqlshUsername}" ] ; then
+    cqlshOpts="${cqlshOpts} --username=${cqlshUsername} --password=${cqlshPassword}"
+  fi
   if [ "$cqlshSSL" != "false" ]; then
     echo "enabling ssl for cqlsh"
     cqlshOpts="$cqlshOpts --ssl"
@@ -674,21 +681,20 @@ collect_info_setup() {
   # DSE
   if [ "$is_dse" == "true" ]; then
     
-    [ "/etc/cassandra" = "${configHome}" ] || echo "Overridding configHome (ignoring previous value of ${configHome})"
-    
     # Check DSE package install
     echo "DSE install: Checking install type..."
     if [ -z "$dse_root_dir" ] && [ -d "/etc/dse" ] && [ -d "/etc/dse/cassandra" ] && [ -f "/etc/default/dse" ] && [ -d "/usr/share/dse/" ]; then
+        [ -n "${configHome}" ] && echo "Overridding configHome (ignoring previous value: ${configHome})"
         echo "DSE install: package directories successfully found. Proceeding..."
         dse_root_dir="/etc/dse/"
         dse_bin_dir="/usr/bin/"
         dse_conf_dir="${dseConfigHome:-/etc/dse/}"
         configHome="/etc/dse/cassandra"
-    elif [ -d "$dse_root_dir" ] && [ -d "$dse_root_dir/resources/cassandra/conf" ] && [ -d "$dse_root_dir/resources/dse/conf" ]; then
+    elif [ -d "${dse_root_dir}" ] && ( [ -d "${configHome}" ] || [ -d "${dse_root_dir}/resources/cassandra/conf" ] ) && ( [ -d "${dseConfigHome}" ] || [ -d "${dse_root_dir}/resources/dse/conf" ] ) ; then
         echo "DSE install: tarball directories successfully found. Proceeding..."
-        dse_bin_dir="$dse_root_dir/bin/"
-        dse_conf_dir="${dseConfigHome:-$dse_root_dir/resources/dse/conf/}"
-        configHome="$dse_root_dir/resources/cassandra/conf"
+        dse_bin_dir="${dse_root_dir}/bin/"
+        dse_conf_dir="${dseConfigHome:-${dse_root_dir}/resources/dse/conf/}"
+        configHome="${configHome:-${dse_root_dir}/resources/cassandra/conf}"
     else
         echo "DSE install: no package or tarball directories found, or no tarball directory specified."
         exit 1
@@ -721,6 +727,7 @@ collect_info_setup() {
     fi
   else
     skip_dse="true"
+    configHome="${configHome:-/etc/cassandra}"
   fi
 }
 
@@ -762,10 +769,14 @@ archive_artifacts() {
   fi
   # shellcheck disable=SC1001
   # NF is number of fields, which the blanks in front of the first / is the first field
-  artifactName=$(echo "$artifactDir"|awk -F\/ '{print $NF}')
-  tar -zcvf "$artifactDir.tar.gz" "$artifactName" >> /dev/null 2>&1 && rm -rf "$artifactDir"
+  artifactName=$(echo "${artifactDir}"|awk -F\/ '{print $NF}')
+  tar -cf "${artifactDir}.tar" "$artifactName"
   statusState=$?
-  echo "$artifactDir.tar.gz" > "$baseDir/$artifactFile"
+  if [ 0 = ${statusState} ] ; then
+    rm -rf "$artifactDir"
+    gzip "${artifactDir}.tar"
+    echo "${artifactDir}.tar.gz" > "${baseDir}/${artifactFile}"
+  fi
   print_status_state
 }
 
@@ -912,7 +923,8 @@ node_cleanup() {
   node_connect "rm -f \"${baseDir}/${dstat}\""
   node_connect "rm -f \"${baseDir}/collect-info\""
   for f in ${script_directory}/etc/*; do
-    node_connect "rm -f \"${baseDir}/etc/${f}\""
+    f_remote="$(echo $f | awk -F'/etc/' '{print $2}')"
+    node_connect "rm -f \"${baseDir}/etc/${f_remote}\""
   done
 }
 
@@ -990,7 +1002,7 @@ get_info() {
 
     node_connect "mkdir -p $baseDir/etc"
     for f in ${script_directory}/etc/*; do
-      node_push "$f" "$baseDir/etc"
+      node_push "$f" "$baseDir/etc/"
     done
 
     if [ "$copyConfig" ]; then
@@ -1000,7 +1012,10 @@ get_info() {
     node_connect "chmod +x \"${baseDir}/$targetFile\""
     node_connect "chmod +x \"${baseDir}/$dstat\""
     node_connect "chmod +x \"${baseDir}/collect-info\""
-    node_connect "chmod +x \"${baseDir}/etc/*\""
+    for f in ${script_directory}/etc/*; do
+      f_remote="$(echo $f | awk -F'/etc/' '{print $2}')"
+      node_connect "chmod +x \"${baseDir}/etc/${f_remote}\""
+    done
 
     if [ "$sudo_script_on_node" ]; then
       node_connect "sudo $baseDir/$targetFile ${collectionArgs[*]}"
@@ -1061,7 +1076,6 @@ targetFile=$(basename $0)
 
 # base cassandra
 logHome="/var/log/cassandra"
-configHome="/etc/cassandra"
 #dataHome="/var/lib/cassandra/data"
 
 # expected base ssh options
@@ -1083,8 +1097,6 @@ jmxPort="7199"
 bucket="collector-dead-drop"
 #useS3Auth="true"
 
-cqlshUsername="cassandra"
-cqlshPassword="cassandra"
 cqlshSSL="false"
 
 # initialize arrays

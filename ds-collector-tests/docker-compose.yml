@@ -20,9 +20,6 @@ services:
         retries: 60
 
   cassandra-01:
-    build:
-        context: .
-        dockerfile: integration-cassandra.docker
     image: ds-collector:integration-cassandra
     container_name: ds-collector-tests_cassandra-01_1
     depends_on:
@@ -43,9 +40,6 @@ services:
         retries: 60
 
   cassandra-02:
-    build:
-       context: .
-       dockerfile: integration-cassandra.docker
     image: ds-collector:integration-cassandra
     container_name: ds-collector-tests_cassandra-02_1
     depends_on:

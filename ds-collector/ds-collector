@@ -745,7 +745,8 @@ discover_jmx() {
  tmp=""
 
   # XXX from Cassandra 4.0 it is possible to have multiple process per ip, how can we handle this?
-  server_cmdline="$(ps -aef|grep -e 'org.apache.cassandra.service.CassandraDaemon' -e 'com.datastax.bdp.DseModule'|grep java)"
+  server_cmdline="$(ps -aeo "%a"|grep -E 'org.apache.cassandra.service.CassandraDaemon|com.datastax.bdp.DseModule' | grep java | grep -v grep | tr -d '\r' | head -n1)"
+
   tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.local.port=' |sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
   if [ -n "$tmp" ]; then
       jmxPort="$tmp"
@@ -759,7 +760,7 @@ discover_jmx() {
           jmxHost="$tmp"
       fi
   fi
-  if [ -n "$(command -v nc)" ]; then
+  if ( command -v nc >/dev/null 2>&1 ) ; then
     # test jmxHost, failling back if need be
     $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
     if [ $? != 0 ]; then
@@ -776,6 +777,7 @@ discover_jmx() {
   else
     echo "nc not found, auto-test of jmxHost disabled"
   fi
+  # run it again to test detected settings
   $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
   if [ $? = 0 ]; then
     echo "Confirmed JMX at ${jmxHost}:${jmxPort}"

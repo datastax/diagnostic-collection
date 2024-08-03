@@ -100,7 +100,7 @@ connection_tests() {
     connection_test_result="$?"
     if [ "${connection_test_result}" = "0" ] && [[ ${runOnSingleNode} != "true" ]]
     then
-      list_cassandra_nodes
+      list_cassandra_nodes_client
       for host in ${cassandraNodes}
       do
         # shellcheck disable=SC1001
@@ -115,8 +115,9 @@ connection_tests() {
 }
 
 # shellcheck disable=SC2086
-list_cassandra_nodes() {
-  statusState=0
+list_cassandra_nodes_client() {
+  statusState=1
+
   pathCommand=""
   # pull the path - if prepend path or add path have been set, includes them as a part of the path for the 
   # nodetool command. We pull the remote path since using an echo PATH $PATH followed by a grep / sed - this ensures that
@@ -125,41 +126,26 @@ list_cassandra_nodes() {
   remotePath=$(node_connect 'echo PATH \$PATH' | grep PATH | sed -n -e 's/^.*PATH //p')
   pathCommand="export PATH=$prependPath:$remotePath:$addPath;"
 
-  # change this if there's an alias, or a full path needs to be specified
-  nodetoolCmd="nodetool"
-  # Check if adding password to nodetool is needed:
-  nodetoolCredentials=""
-  # workaround for issue/152: replace previous line with
-  # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"  
-  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
-  then
-    nodetoolCredentials="${nodetoolCredentials} -u $jmxUsername -pw $jmxPassword"
-  fi
-  jmxOpts=""
-  if [ "$jmxSSL" = "true" ]; then
-    jmxOpts="--ssl"
-  fi
+  read_host_name
+  baseMessage="initial transfer of collection script and execute on ${hostName}"
+  node_connect "mkdir -p \"${baseDir}\""
+  if [ "$?" = "0" ]; then
+    node_push "$0" "${baseDir}/$targetFile"
 
-  # 'timeout -t SECS' is required on older busybox
-  TIMEOUT_OPT="3"
-  ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 3"
-  timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
-
-  jmxHost='127.0.0.1'
-  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
-  if [ $? = 0 ]; then
-    jmxHost='localhost'
-    echo "Using localhost to connect to JMX..."
-  else
-    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
-    if [ $? = 0 ]; then
-      jmxHost="$(hostname)"
-      echo "Using $(hostname) to connect to JMX..."
+    if [ "${copyConfig}" ]; then
+      node_push "${configPath}" "${baseDir}/$(basename ${configFile})"
     fi
+
+    node_connect "chmod +x \"${baseDir}/$targetFile\""
+
+    if [ "$sudo_script_on_node" ]; then
+      cassandraNodes=$(node_connect "sudo ${baseDir}/${targetFile} -L" | tr "\n\r" " ")
+    else
+      cassandraNodes=$(node_connect "${baseDir}/${targetFile} -L" | tr "\n\r" " ")
+    fi
+    statusState=$?
   fi
-  cmd="set -o pipefail ; ${pathCommand} ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials status | grep UN | tr -s ' ' | cut -d' ' -f2"
-  cassandraNodes=$(node_connect "$cmd" | tr "\n\r" " ")
-  statusState=$?
+
   if [ "$statusState" = "0" ]; then
     # ipaddresses need to be translated to docker container IDs
     if [ "$use_docker" = "true" ]; then
@@ -182,7 +168,7 @@ list_cassandra_nodes() {
     [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
 
     # also grab the cluster name
-    cmd="set -o pipefail ; ${nodetoolCmd} -h $jmxHost -p $jmxPort ${jmxOpts} $nodetoolCredentials describecluster"
+    cmd="set -o pipefail ; ${pathCommand} ${nodetoolCmd} -h ${jmxHost} -p ${jmxPort} ${jmxOpts} ${nodetoolCredentials} describecluster"
     clusterName=$(node_connect "$cmd" | grep Name | awk '{print $2}' | tr -d '\r')
     if [ $? = 0 ]; then
       export clusterName
@@ -195,6 +181,21 @@ list_cassandra_nodes() {
     echo "Is Cassandra/DSE running on ${hostName} ?"
   fi
   return $statusState
+}
+
+list_cassandra_nodes_server() {
+  statusState=0
+  update_path
+  update_env
+
+  # 'timeout -t SECS' is required on older busybox
+  TIMEOUT_OPT="3"
+  ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 3"
+  timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
+
+  discover_jmx > /dev/null 2>&1
+
+  ${pathCommand} ${nodetoolCmd} -h ${jmxHost} -p ${jmxPort} ${jmxOpts} ${nodetoolCredentials} status | grep UN | tr -s ' ' | cut -d' ' -f2
 }
 
 translate_ipaddresses_to_docker_container_ids() {
@@ -511,11 +512,13 @@ collect_via_rust() {
   export skip_dse="${skip_dse:-false}"
   export skipStat="${skipStat:-false}"
   export prometheus_jar="${baseDir}/${prometheus}"
+  export jmxHost
   export jmxPort
   export jmxUsername
   export jmxPassword
   export jmxSSL
-  export jmxHost
+  export jmxPlain="$(if [ "${jmxSSL}" = "true" ]; then echo "false"; else echo "true"; fi)"
+  export jmx_exporter_opts
   export nodetoolCredentials
   export cqlsh_host="${cqlsh_host:-$(hostname)}"
   export cqlsh_port="${cqlsh_port:-9042}"
@@ -633,9 +636,13 @@ collect_info_setup() {
   update_path
   update_env
 
+  server_cmdline="$(ps -aef|grep -e "org.apache.cassandra.service.CassandraDaemon" -e "com.datastax.bdp.DseModule"|grep java)"
+  server_pid="$(echo ${server_cmdline}|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
+
   if [ -n "${cqlshUsername}" ] ; then
     cqlshOpts="${cqlshOpts} --username=${cqlshUsername} --password=${cqlshPassword}"
   fi
+  cqlshOpts="${cqlshOpts} --username=$cqlshUsername --password=$cqlshPassword"
   if [ "$cqlshSSL" != "false" ]; then
     echo "enabling ssl for cqlsh"
     cqlshOpts="$cqlshOpts --ssl"
@@ -649,34 +656,7 @@ collect_info_setup() {
   ( timeout --help | grep -q "t SECS" ) && TIMEOUT_OPT="-t 30"
   timeout_command="timeout $FOREGROUND_OPT $TIMEOUT_OPT"
 
-  # Make our best guess on the host address to use to access nodetool/JMX
-  jmxHost='127.0.0.1'
-  $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
-  if [ $? == 0 ]; then
-    jmxHost='localhost'
-    echo "Using localhost to connect to JMX..."
-  else
-    $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
-    if [ $? == 0 ]; then
-      jmxHost="$(hostname)"
-      echo "Using $(hostname) to connect to JMX..."
-    fi
-  fi
-
-  # Check if adding password to nodetool is needed:
-  nodetoolCredentials=""
-  # workaround for issue/152: replace previous line with
-  # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"
-  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
-  then
-    nodetoolCredentials="${nodetoolCredentials} -u $jmxUsername -pw $jmxPassword"
-  fi
-
-  server_pid="$(ps -aef|grep org.apache.cassandra.service.CassandraDaemon|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
-  if [ -z "$server_pid" ] ; then
-    # no Cassandra server found, look for DSE
-    server_pid="$(ps -aef|grep com.datastax.bdp.DseModule|grep java|sed -e 's|^[ ]*[^ ]*[ ]*\([^ ]*\)[ ].*|\1|')"
-  fi
+  discover_jmx
 
   # DSE
   if [ "$is_dse" == "true" ]; then
@@ -759,6 +739,85 @@ collect_dse_solr_cores() {
             $timeout_command $dse_bin_dir/dsetool $dt_opts list_index_files "$core" > "$artifactDir/solr/$core/index_files" 2>&1
         done
     fi
+}
+
+discover_jmx() {
+ tmp=""
+
+  # XXX from Cassandra 4.0 it is possible to have multiple process per ip, how can we handle this?
+  server_cmdline="$(ps -aeo "%a"|grep -E 'org.apache.cassandra.service.CassandraDaemon|com.datastax.bdp.DseModule' | grep java | grep -v grep | tr -d '\r' | head -n1)"
+
+  tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.local.port=' |sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
+  if [ -n "$tmp" ]; then
+      jmxPort="$tmp"
+  else
+      tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.remote.port=' |sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
+      if [ -n "$tmp" ]; then
+          jmxPort="$tmp"
+      fi
+      tmp=$(echo "${server_cmdline}" | grep 'java.rmi.server.hostname=' |sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
+      if [ -n "$tmp" ]; then
+          jmxHost="$tmp"
+      fi
+  fi
+  if ( command -v nc >/dev/null 2>&1 ) ; then
+    # test jmxHost, failling back if need be
+    $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
+    if [ $? != 0 ]; then
+      $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
+      if [ $? = 0 ]; then
+        jmxHost='localhost'
+      else
+        $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
+        if [ $? = 0 ]; then
+          jmxHost="$(hostname)"
+        fi
+      fi
+    fi
+  else
+    echo "nc not found, auto-test of jmxHost disabled"
+  fi
+  # run it again to test detected settings
+  $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
+  if [ $? = 0 ]; then
+    echo "Confirmed JMX at ${jmxHost}:${jmxPort}"
+  else
+    echo "Unconfirmed JMX at ${jmxHost}:${jmxPort}"
+  fi
+
+  # Check if adding password to nodetool is needed:
+  nodetoolCredentials=""
+  # workaround for issue/152: replace previous line with
+  # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"
+  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]] ; then
+    nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+  elif echo "${server_cmdline}" | grep -q 'com.sun.management.jmxremote.authenticate=true' ; then
+    echo "JMX authentication is enabled but no credentials have been configured. Please configure jmxUsername and jmxPassword in collector.conf"
+  fi
+  jmxOpts=""
+  jmx_exporter_opts=""
+  if [ "$jmxSSL" = "true" ] || echo "${server_cmdline}" | grep -q 'com.sun.management.jmxremote.ssl=true' ; then
+    jmxSSL="true"
+    jmxOpts="--ssl"
+
+    tmp=$(echo "${server_cmdline}" | grep 'javax.net.ssl.keyStore=' |sed -e 's|^.*-Djavax.net.ssl.keyStore=\([^ ]*\).*$|\1|')
+    if [ -n "$tmp" ]; then
+        jmx_exporter_opts="${jmx_exporter_opts} -Djavax.net.ssl.keyStore=${tmp}"
+    fi
+    tmp=$(echo "${server_cmdline}" | grep 'javax.net.ssl.keyStorePassword=' |sed -e 's|^.*-Djavax.net.ssl.keyStorePassword=\([^ ]*\).*$|\1|')
+    if [ -n "$tmp" ]; then
+        jmx_exporter_opts="${jmx_exporter_opts} -Djavax.net.ssl.keyStorePassword=${tmp}"
+    fi
+    tmp=$(echo "${server_cmdline}" | grep 'javax.net.ssl.trustStore=' |sed -e 's|^.*-Djavax.net.ssl.trustStore=\([^ ]*\).*$|\1|')
+    if [ -n "$tmp" ]; then
+        jmx_exporter_opts="${jmx_exporter_opts} -Djavax.net.ssl.trustStore=${tmp}"
+    fi
+    tmp=$(echo "${server_cmdline}" | grep 'javax.net.ssl.trustStorePassword=' |sed -e 's|^.*-Djavax.net.ssl.trustStorePassword=\([^ ]*\).*$|\1|')
+    if [ -n "$tmp" ]; then
+        jmx_exporter_opts="${jmx_exporter_opts} -Djavax.net.ssl.trustStorePassword=${tmp}"
+    fi
+  fi
+  dt_opts="-h ${jmxHost} -p ${jmxPort} ${nodetoolCredentials} ${jmxOpts} ${dt_opts}"
 }
 
 archive_artifacts() {
@@ -957,7 +1016,7 @@ get_infos() {
       fi
     done 10< $hostFile
   elif [[ ${runOnSingleNode} != "true" ]] && [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
-    list_cassandra_nodes
+    list_cassandra_nodes_client
     # XXX – can be optimised to do all nodes in a rack in parallel
     for host in ${cassandraNodes} ; do
       hostName=$host
@@ -1090,14 +1149,15 @@ sshOptionConnectAttempts="true"
 k8s_namespace="default"
 k8s_container_name=""
 
-# JMX port
-jmxPort="7199"
-
 # s3
 bucket="collector-dead-drop"
 #useS3Auth="true"
 
 cqlshSSL="false"
+
+nodetoolCmd="nodetool"
+jmxHost="127.0.0.1"
+jmxPort="7199"
 
 # initialize arrays
 myArrays=(
@@ -1125,7 +1185,6 @@ myVariables=(
   sshIdentity
   enablePingTest
   userName
-  skipStat
   skipSudo
   testMode
   executeMode
@@ -1150,7 +1209,7 @@ addPath="/usr/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:/sbin"
 defaultUserName="root"
 collectionArgs=(-C)
 
-while getopts f:n:a:hHpdvxCT-X flag; do
+while getopts f:n:a:hHpdvxCLT-X flag; do
   case $flag in
     f) configFile=$OPTARG ;;
     n) hostName=$OPTARG ;;
@@ -1159,6 +1218,7 @@ while getopts f:n:a:hHpdvxCT-X flag; do
     T) testMode="true" ;;
     X) executeMode="true" ;;
     C) clientMode="true" ;;
+    L) listNodesMode="true" ;;
     d) runOnSingleNode="true" ;;
     v) verbose="true" ;;
     x) debug="true" ;;
@@ -1222,6 +1282,12 @@ elif [ $clientMode ]; then
     echo -e \\n"-d cannot be specified with -C"\\n; halp; exit 2 
   fi
   collect_info
+  exit $?
+elif [ $listNodesMode ]; then
+  if [[ ${runOnSingleNode} == "true" ]] ; then
+    echo -e \\n"-d cannot be specified with -L"\\n; halp; exit 2
+  fi
+  list_cassandra_nodes_server
   exit $?
 elif [ "$uploadMode" ]; then
   bastion_checks

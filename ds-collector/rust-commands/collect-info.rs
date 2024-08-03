@@ -54,11 +54,12 @@ fn main() {
         config_home: &env::var("configHome").unwrap_or("/etc/cassandra".to_string()),
         cassandra_pid: &args[1],
         prometheus_jar: &env::var("prometheus_jar").unwrap_or("none.jar".to_string()),
+        jmx_host:  &env::var("jmxHost").unwrap_or("".to_string()),
         jmx_port: &env::var("jmxPort").unwrap_or("7199".to_string()),
         jmx_username: &env::var("jmxUsername").unwrap_or("".to_string()),
         jmx_password: &env::var("jmxPassword").unwrap_or("".to_string()),
         jmx_ssl: bool::from_str(&env::var("jmxSSL").unwrap_or("false".to_string())).unwrap(),
-        jmx_host:  &env::var("jmxHost").unwrap_or("".to_string()),
+        jmx_exporter_opts: &env::var("jmx_exporter_opts").unwrap_or("".to_string()),
         nodetool_credentials: &env::var("nodetoolCredentials").unwrap_or("".to_string()),
         cqlsh_host:  &env::var("cqlsh_host").unwrap_or("localhost".to_string()),
         cqlsh_port:  &env::var("cqlsh_port").unwrap_or("9042".to_string()),
@@ -224,6 +225,7 @@ fn format_args(args: &str, options: &Options, mask: bool) -> String {
         .replace("{jmx_port}", options.jmx_port)
         .replace("{jmx_username}", options.jmx_username)
         .replace("{jmx_password}", &format_jmx_password(&options.jmx_password, mask))
+        .replace("{jmx_exporter_opts}", options.jmx_exporter_opts)
         .replace("{nodetool_ssl}", &nodetool_ssl(options.jmx_ssl))
         .replace("{nodetool_credentials}", &format_jmx_password(&options.nodetool_credentials, mask))
         .replace("{cqlsh_host}", options.cqlsh_host)
@@ -242,11 +244,11 @@ fn nodetool_ssl(jmx_ssl: bool) -> String {
     }
 }
 
-fn format_jmx_password(jmx_password: &str, mask: bool) -> String {
-    if mask {
+fn format_jmx_password(sensitive: &str, mask: bool) -> String {
+    if mask && !sensitive.is_empty() {
         "****".to_string()
     } else {
-        jmx_password.to_string()
+        sensitive.to_string()
     }
 }
 
@@ -299,11 +301,12 @@ struct Options<'a> {
     data_dir: &'a str,
     cassandra_pid: &'a str,
     prometheus_jar: &'a str,
+    jmx_host: &'a str,
     jmx_port: &'a str,
     jmx_username: &'a str,
     jmx_password: &'a str,
     jmx_ssl: bool,
-    jmx_host: &'a str,
+    jmx_exporter_opts: &'a str,
     nodetool_credentials: &'a str,
     cqlsh_host: &'a str,
     cqlsh_port: &'a str,
@@ -353,10 +356,21 @@ const COMMANDS: &[Cmd<'static>] = &[
     // "java -cp $baseDir/$prometheus io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://127.0.0.1:$jmxPort/jmxrmi $jmxUsername $jmxPassword  > $artifactDir/metrics.jmx"
     Cmd {
         command: "java",
-        args: "-cp {prometheus_jar} io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://{jmx_host}:{jmx_port}/jmxrmi {jmx_username} {jmx_password}",
+        args: "{jmx_exporter_opts} -cp {prometheus_jar} io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://{jmx_host}:{jmx_port}/jmxrmi {jmx_username} {jmx_password}",
         file: "metrics.jmx",
         optional: false,
-        skip_flags: "jmxSSL", // JmxScaper does not support ssl jmx (FIXME)
+        skip_flags: "jmxSSL",
+        use_stdout: true,
+        use_sudo: false,
+        use_timeout: false,
+    },
+    // ssl version of above
+    Cmd {
+        command: "java",
+        args: "{jmx_exporter_opts} -cp {prometheus_jar} io.prometheus.jmx.JmxScraper service:jmx:rmi:///jndi/rmi://{jmx_host}:{jmx_port}/jmxrmi {jmx_username} {jmx_password} ssl",
+        file: "metrics.jmx",
+        optional: false,
+        skip_flags: "jmxPlain",
         use_stdout: true,
         use_sudo: false,
         use_timeout: false,

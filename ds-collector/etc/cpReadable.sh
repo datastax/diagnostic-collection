@@ -33,4 +33,4 @@ rm -rf ${targetDir}
 mkdir -p ${targetDir}
 cd ${sourceDir}
 for DIR in $(find . -type d | sed 's|\.||;s|/||;/^$/d'); do mkdir -p ${targetDir}/$DIR; done
-for FILE in $(find . -type f -readable | sed 's|\.||;s|/||;/^$/d'); do cp -f -L $FILE ${targetDir}/$FILE; done
+for FILE in $(find . \( -type l -o -type f \) -readable | sed 's|\.||;s|/||;/^$/d'); do cp -f -L $FILE ${targetDir}/$FILE; done

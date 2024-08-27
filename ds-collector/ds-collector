@@ -78,7 +78,7 @@ connection_test() {
   if [ "$enablePingTest" ]; then one_ping_only "$hostName"; fi
   baseMessage="connection test to $hostName"
   echo -e \\n"starting $baseMessage"
-  node_connect 'date'
+  node_connect 'date -R'
   print_status_state
 }
 
@@ -332,7 +332,7 @@ bucket_dump() {
   unset -v artifacts
   artifacts=($baseDir/*artifacts*.tar.gz)
 
-  timestamp=$(date +"%b-%d-%H-%M")
+  timestamp=$(date -u +"%Y-%m-%dT%H%M%S")
 
   for artifact in "${artifacts[@]}"
   do
@@ -362,7 +362,7 @@ bucket_dump() {
 }
 
 upload() {
-  timestamp=$(date +"%b-%d-%H-%M")
+  timestamp=$(date -u +"%Y-%m-%dT%H%M%S")
   if [[ -d "${uploadMode}" ]] ; then
     for file in "${uploadMode}"/* ; do
       if [[ -f "$file" ]]; then
@@ -1113,7 +1113,7 @@ get_info() {
 ####### main
 # The more complex construct is more reliable than: script_directory=$(dirname "$0")
 script_directory=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-date=$(date +'%Y_%m_%d_%H%M_%s')
+date=$(date -u +'%Y_%m_%d_%H%M_%s')
 baseDir="/tmp/datastax"
 artifactDir="$baseDir/$(hostname)_artifacts_$date"
 artifactFile="latest_artifacts.txt"
@@ -1262,7 +1262,7 @@ if [ $debug ] ; then
 fi
 if [ $verbose ] ; then
   bastion_checks
-  logFile="${baseDir}/ds-collector-$(date +'%Y-%m-%d-%H-%M-%s').log"
+  logFile="${baseDir}/ds-collector-$(date -u +'%Y-%m-%d-%H-%M-%s').log"
   echo "debugging to ${logFile}"
   ( exec $0 ${@/-v/-x} )  2>&1  | sed "s/${jmxPassword:-\*\*\*\*}/****/g" | sed "s/${cqlshPassword:-\*\*\*\*}/****/g" | tee "${logFile}"
   exit $?

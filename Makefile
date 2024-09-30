@@ -95,22 +95,13 @@ endif
 generate-key:
 # If the secrets manager is not configured, we will perform a local key build
 	$(eval KEY_FILE_NAME := $(shell echo $(subst /,-,$(ISSUE))_secret.key))
-ifndef COLLECTOR_SECRETSMANAGER_KEY
 ifdef COLLECTOR_S3_BUCKET
 	@(openssl rand -base64 256 > ${KEY_FILE_NAME})
 	@(echo "An encryption key has been generated as ${KEY_FILE_NAME}")
+ifdef COLLECTOR_SECRETSMANAGER_KEY
+	@(echo "I will now add the key to the Secrets Manager")
+	AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
+	@[ $? -eq 0 ] || { echo "Failed to create-secret.  Possible a collector with this issueId and secret already exists. Each collector created needs a new issueId." ; exit 1; }
 endif
-else
-	$(eval SECRET_EXISTS := $(shell AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets | grep ${KEY_FILE_NAME} | grep Name))
-	@if [ -z "${SECRET_EXISTS}" ]; then \
-		echo "Since the secret does not exist for $(subst /,-,$(ISSUE)), will generate a new one" ; \
-		openssl rand -base64 256 > ${KEY_FILE_NAME} ; \
-		echo "An encryption key has been generated as ${KEY_FILE_NAME}" ; \
-		echo "I will now add the key to the Secrets Manager" ; \
-		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
-	else \
-		echo "Secret exists in Secrets Manager with ${SECRET_EXISTS} so will fetch it." ; \
-		AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager get-secret-value --secret-id ${KEY_FILE_NAME} | grep SecretString | cut -d: -f2- | sed 's|^ *"|"|; s|",\o24|"|' | xargs printf > ${KEY_FILE_NAME} ;\
-	fi
 endif
 

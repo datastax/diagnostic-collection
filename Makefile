@@ -84,10 +84,9 @@ endif
 ifndef COLLECTOR_S3_AWS_SECRET
 	$(error COLLECTOR_S3_AWS_SECRET must also be defined if COLLECTOR_SECRETSMANAGER_KEY is defined)
 endif
-	@(command -v aws >/dev/null 2>&1) || { echo >&2 "aws needs to be installed"; exit 1; }
-	@(AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets 2>/dev/null | grep -q Name ) || { echo >&2 "Failure: aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager list-secrets"; exit 1; }
 endif
-# final checks, we need docker installed and running to build the rust executable
+# final checks, we need aws cli, and we need docker installed and running to build the rust executable
+	@(command -v aws >/dev/null 2>&1) || { echo >&2 "aws needs to be installed"; exit 1; }
 	@(command -v docker >/dev/null 2>&1) || { echo >&2 "docker needs to be installed"; exit 1; }
 	@(docker info >/dev/null 2>&1) || { echo "docker needs to running"; exit 1; }
     

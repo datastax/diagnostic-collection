@@ -99,8 +99,7 @@ ifdef COLLECTOR_S3_BUCKET
 	@(echo "An encryption key has been generated as ${KEY_FILE_NAME}")
 ifdef COLLECTOR_SECRETSMANAGER_KEY
 	@(echo "I will now add the key to the Secrets Manager")
-	AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} ;\
-	@[ $? -eq 0 ] || { echo "Failed to create-secret.  Possible a collector with this issueId and secret already exists. Each collector created needs a new issueId." ; exit 1; }
+	AWS_ACCESS_KEY_ID=${COLLECTOR_SECRETSMANAGER_KEY} AWS_SECRET_ACCESS_KEY=${COLLECTOR_SECRETSMANAGER_SECRET} aws ${AWS_ENDPOINT_URL} --region=us-west-2 secretsmanager create-secret --name ${KEY_FILE_NAME} --description "Reuben collector key" --secret-string file://${KEY_FILE_NAME} || { echo "Failed to create-secret.  Possible a collector with this issueId and secret already exists. Each collector created needs a new issueId." ; exit 1; }
 endif
 endif
 

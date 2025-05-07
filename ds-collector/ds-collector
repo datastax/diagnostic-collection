@@ -471,7 +471,7 @@ s3_push_artifact() {
 
 create_complete_marker() {
   artifact_count="${#artifacts[@]}"
-  node_count="$(echo $cassandraNodes | wc -w)"
+  [[ ${runOnSingleNode} == "true" ]] && node_count="1" || node_count="$(echo $cassandraNodes | wc -w)"
   if [ "$artifact_count" == "$node_count" ]; then
     completeFileName="collector_upload.complete"
   else

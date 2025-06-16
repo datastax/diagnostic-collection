@@ -106,6 +106,9 @@
 #jmxUsername=""
 #jmxPassword=""
 
+# Set this if JMX password is stored in a file
+#jmxPasswordFilePath=""
+
 # change this if there's an alias, or a full path needs to be specified (prependPath and addPath settings do not apply to nodetool)
 #nodetoolCmd="nodetool"
 

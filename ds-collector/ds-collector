@@ -516,6 +516,7 @@ collect_via_rust() {
   export jmxPort
   export jmxUsername
   export jmxPassword
+  export jmxPasswordFilePath
   export jmxSSL
   export jmxPlain="$(if [ "${jmxSSL}" = "true" ]; then echo "false"; else echo "true"; fi)"
   export jmx_exporter_opts
@@ -791,6 +792,8 @@ discover_jmx() {
   # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"
   if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]] ; then
     nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
+  elif [[ -n ${jmxUsername} ]] && [[ -n ${jmxPasswordFilePath} ]] ; then
+    nodetoolCredentials="-u $jmxUsername -pwf $jmxPasswordFilePath"
   elif echo "${server_cmdline}" | grep -q 'com.sun.management.jmxremote.authenticate=true' ; then
     echo "JMX authentication is enabled but no credentials have been configured. Please configure jmxUsername and jmxPassword in collector.conf"
   fi

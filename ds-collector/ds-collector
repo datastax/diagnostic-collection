@@ -742,24 +742,36 @@ collect_dse_solr_cores() {
 }
 
 discover_jmx() {
- tmp=""
 
   # XXX from Cassandra 4.0 it is possible to have multiple process per ip, how can we handle this?
   server_cmdline="$(ps -aeo "%a"|grep -E 'org.apache.cassandra.service.CassandraDaemon|com.datastax.bdp.DseModule' | grep java | grep -v grep | tr -d '\r' | head -n1)"
 
-  tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.local.port=' |sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
-  if [ -n "$tmp" ]; then
+  if [ -z "${jmxPort}" ]; then
+    tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.local.port=' |sed -e 's|^.*-Dcassandra.jmx.local.port=\([^ ]*\).*$|\1|')
+    if [ -n "$tmp" ]; then
       jmxPort="$tmp"
-  else
-      tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.remote.port=' |sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
-      if [ -n "$tmp" ]; then
+    else
+        tmp=$(echo "${server_cmdline}" | grep 'cassandra.jmx.remote.port=' |sed -e 's|^.*-Dcassandra.jmx.remote.port=\([^ ]*\).*$|\1|')
+        if [ -n "$tmp" ]; then
           jmxPort="$tmp"
-      fi
-      tmp=$(echo "${server_cmdline}" | grep 'java.rmi.server.hostname=' |sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
-      if [ -n "$tmp" ]; then
-          jmxHost="$tmp"
-      fi
+        fi
+        if [ -z "${jmxHost}" ]; then
+          tmp=$(echo "${server_cmdline}" | grep 'java.rmi.server.hostname=' |sed -e 's|^.*-Djava.rmi.server.hostname=\([^ ]*\).*$|\1|')
+          if [ -n "$tmp" ]; then
+            jmxHost="$tmp"
+          fi
+        else
+          echo "already configured jmxHost=${jmxHost}"
+        fi
+    fi
+  else
+    echo "already configured jmxPort=${jmxPort}"
   fi
+
+  # defensive defaults
+  jmxHost="${jmxHost:-127.0.0.1}"
+  jmxPort="${jmxPort:-7199}"
+  
   if ( command -v nc >/dev/null 2>&1 ) ; then
     # test jmxHost, failling back if need be
     $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
@@ -767,16 +779,19 @@ discover_jmx() {
       $timeout_command nc -zv localhost $jmxPort > /dev/null 2>&1
       if [ $? = 0 ]; then
         jmxHost='localhost'
+        echo "updated jmxHost to localhost"
       else
         $timeout_command nc -zv $(hostname) $jmxPort > /dev/null 2>&1
         if [ $? = 0 ]; then
           jmxHost="$(hostname)"
+          echo "updated jmxHost to ${jmxHost}"
         fi
       fi
     fi
   else
     echo "nc not found, auto-test of jmxHost disabled"
   fi
+
   # run it again to test detected settings
   $timeout_command  nc -zv "${jmxHost}" "${jmxPort}" > /dev/null 2>&1
   if [ $? = 0 ]; then
@@ -1156,8 +1171,6 @@ bucket="collector-dead-drop"
 cqlshSSL="false"
 
 nodetoolCmd="nodetool"
-jmxHost="127.0.0.1"
-jmxPort="7199"
 
 # initialize arrays
 myArrays=(

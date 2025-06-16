@@ -282,6 +282,16 @@ bastion_checks() {
   if [ -n "${cqlshUsername}" ] ; then
     [ -n "${cqlshPassword}" ] || { echo >&2 "The cqlsh username is configured but not the password" ; exit 1 ; }
   fi
+
+  if [ -n "${jmxPassword}" ] ; then
+    [ -n "${jmxUsername}" ] || { echo >&2 "jmxPassword is configured but not jmxUsername" ; exit 1 ; }
+  fi
+  if [ -n "${jmxPasswordFilePath}" ] ; then
+    [ -n "${jmxUsername}" ] || { echo >&2 "jmxPasswordFilePath is configured but not jmxUsername" ; exit 1 ; }
+  fi
+  if [ -n "${jmxUsername}" ] ; then
+    [ -n "${jmxPassword}" ] || [ -n "${jmxPasswordFilePath}" ] || { echo >&2 "jmxUsername is configured but neither jmxPassword or jmxPasswordFilePath" ; exit 1 ; }
+  fi
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v ssh >/dev/null 2>&1 || { echo >&2 "ssh needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || command -v scp >/dev/null 2>&1 || { echo >&2 "scp needs to be installed"; exit 1; }
   [ "$use_docker" = "true" ] || [ "$use_k8s" = "true" ] || ! [ -n "$sshPassword" ] || command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass needs to be installed"; exit 1; }
@@ -305,6 +315,9 @@ node_checks() {
   [[ -f "$baseDir/${prometheus}" ]] || { echo >&2 "$baseDir/${prometheus} must exist"; exit 1; }
   [[ -x "$baseDir/$dstat" ]] || { echo >&2 "$baseDir/$dstat must exist"; exit 1; }
   [[ -x "$baseDir/collect-info" ]] || { echo >&2 "$baseDir/collect-info must exist"; exit 1; }
+  if [ -n "${jmxPasswordFilePath}" ] ; then
+    [ -e "${jmxPasswordFilePath}" ] || { echo >&2 "jmxPasswordFilePath is configured but does not point to a file: ${jmxPasswordFilePath}" ; exit 1 ; }
+  fi
   [ "$skipSudo" = "true" ] || ( sudo -n ls 2>/dev/null ) || { echo >&2 "sudo (without password) is not configured. Configure it, or set skipSudo to true"; exit 1; }
   # detect if df supports --portability
   DF_OPT=""
@@ -789,6 +802,21 @@ discover_jmx() {
   nodetoolCredentials=""
   # workaround for issue/152: replace previous line with
   # nodetoolCredentials="-Dcom.sun.jndi.rmiURLParsing=legacy"
+
+  # get jmxPassword from jmxPasswordFilePath if that's been provided
+  if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPasswordFilePath} ]] ; then
+    while IFS= read -r line; do
+      # Skip empty lines
+      [[ -z "$line" ]] && continue
+      # Read first two fields from the line
+      read -r _role _password <<< "$line"
+      if [[ "${_role}" == "${jmxUsername}" ]]; then
+          jmxPassword="${_password}"
+          break
+      fi
+    done < "${jmxPasswordFilePath}"
+  fi
+
   if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]] ; then
     nodetoolCredentials="-u $jmxUsername -pw $jmxPassword"
   elif echo "${server_cmdline}" | grep -q 'com.sun.management.jmxremote.authenticate=true' ; then
@@ -1242,24 +1270,16 @@ fi
 set_ssh_options
 set_scp_options
 
-if [ -f "$hostName" ]; then
-  hostFile=$hostName
-fi
+# if hostName argument points to a file then treat it as the hostFile argument
+[ -f "$hostName" ] && hostFile=$hostName
 
-if [ -n "$k8s_container_name" ]
-then
-  k8s_container_name_opt="-c $k8s_container_name"
-fi
+[ -n "$k8s_container_name" ] && k8s_container_name_opt="-c $k8s_container_name"
 
-if [[ -n ${jmxUsername} ]] && [[ -n ${jmxPassword} ]]
-then
-  jmxUsername=$(escape_special_chars "$jmxUsername")
-  jmxPassword=$(escape_special_chars "$jmxPassword")
-fi
+[[ -n ${jmxUsername} ]] && jmxUsername=$(escape_special_chars "$jmxUsername")
+[[ -n ${jmxPassword} ]] && jmxPassword=$(escape_special_chars "$jmxPassword")
 
-if [ $debug ] ; then
-  set -x
-fi
+[ $debug ] && set -x
+
 if [ $verbose ] ; then
   bastion_checks
   logFile="${baseDir}/ds-collector-$(date -u +'%Y-%m-%d-%H-%M-%s').log"

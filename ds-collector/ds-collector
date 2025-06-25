@@ -853,7 +853,7 @@ archive_artifacts() {
   artifactName=$(echo "${artifactDir}"|awk -F\/ '{print $NF}')
   tar -cf "${artifactDir}.tar" "$artifactName"
   statusState=$?
-  if [ 0 = ${statusState} ] ; then
+  if [ 0 = ${statusState} ] && tar -tf "${artifactDir}.tar" > /dev/null 2>&1 ; then
     rm -rf "$artifactDir"
     gzip "${artifactDir}.tar"
     echo "${artifactDir}.tar.gz" > "${baseDir}/${artifactFile}"

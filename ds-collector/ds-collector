@@ -66,6 +66,12 @@ update_env() {
   :
 }
 
+clean_before_archive() {
+  # if there is anything in ${artifactDir} that should not be shared, remove it here
+  #rm "${artifactDir}/something_private"
+  :
+}
+
 one_ping_only() {
   baseMessage="ping test to $1"
   ping -c 1 "$1" > /dev/null 2>&1
@@ -841,6 +847,7 @@ archive_artifacts() {
   if [ "$skipSudo" != "true" ]; then
     sudo chown -R "$(whoami)" "$artifactDir"
   fi
+  clean_before_archive
   # shellcheck disable=SC1001
   # NF is number of fields, which the blanks in front of the first / is the first field
   artifactName=$(echo "${artifactDir}"|awk -F\/ '{print $NF}')

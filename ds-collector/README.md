@@ -243,4 +243,4 @@ For other limitations, please see the list of open [Issues](https://github.com/d
 Contact
 =======
 
-For questions, to report an issue, to request a feature/enhancement, etc., please use [GitHub Issue](https://github.com/datastax/diagnostic-collection/issues/new) or visit our Community Forums: https://community.datastax.com
+For questions, to report an issue, to request a feature/enhancement, etc., please use [GitHub Issue](https://github.com/datastax/diagnostic-collection/issues/new) or visit our Community Server: https://dtsx.io/discord

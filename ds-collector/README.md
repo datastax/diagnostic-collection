@@ -17,9 +17,6 @@ Just do it, the following instructions ​work for most​ people.
 tar -xvf ds-collector.*.tar.gz
 cd collector
 
-# if an encryption file has been provided, copy it to this folder
-cp <some-path>/*_secret.key .
-
 # go through the configuration file, set all parameters as suited
 edit collector.conf
 

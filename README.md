@@ -2,14 +2,29 @@
 
 A script for collecting a diagnostic snapshot (support bundle) from each node in a Cassandra based cluster.
 
-The code for the collector script is in the _ds-collector/_ directory.
 
-Then _ds-collector/_ code must first be built into a `ds-collector*.tar.gz` tarball.
+# Users: Running the Collector against your Cluster
 
-The built `ds-collector*.tar.gz` tarball is then extracted onto a bastion or jumpbox that has access to the nodes in the cluster. Once extracted, the configuration file (collector.conf) can be edited to match any cluster deployment customisations (e.g. non-default port numbers, non-default log location, etc). The ds-collector script can then be executed; first in test mode and then in collection mode.
+Download the latest `ds-collector.GENERIC-*.tar.gz` release from the [releases page](https://github.com/datastax/diagnostic-collection/releases).
+
+This `ds-collector*.tar.gz` tarball is then extracted onto a bastion or jumpbox that has access to the nodes in the cluster.
+
+Instructions for running the Collector is found in [`ds-collector/README.md`](https://github.com/datastax/diagnostic-collection/blob/master/ds-collector/README.md).
+
+If you hit any issues please also read [`ds-collector/TROUBLESHOOTING.md`](https://github.com/datastax/diagnostic-collection/blob/master/ds-collector/TROUBLESHOOTING.md).
+
+These instructions are also bundled into the built collector tarball.
 
 
-# Pre-configuring the Collector Configuration
+# Developers: Building from source code
+
+The code for the collector script is in the _ds-collector/_ directory.  This top-level directory contains the `Makefile` for developers wishing to build the ds-collector bundle for themselves.
+
+Then _ds-collector/_ code gets built into a `ds-collector*.tar.gz` tarball.
+
+
+
+## Pre-configuring the Collector Configuration
 When building the collector, it can be instructed to pre-configure the collector.conf by setting the following variables:
 
 ```bash
@@ -24,7 +39,7 @@ export is_k8s=true
 If no variables are set, then the collector will be pre-configured to assume Apache Cassandra running on hosts which can be accessed via SSH.
 
 
-# Building the Collector
+## Building the Collector
 Build the collector using the following make command syntax. You will need make and Docker.
 
 ```bash
@@ -36,7 +51,7 @@ make
 This will generate a _.tar.gz_ tarball with the `issueId` set in the packaged configuration file. The archive will named in the format `ds-collector.$ISSUE.tar.gz`.
 
 
-# Building the Collector with automatic s3 upload ability
+## Building the Collector with automatic s3 upload ability
 
 If the collector is built with the following variables defined, all collected diagnostic snapshots will be encrypted and uploaded to a specific AWS S3 bucket. Encryption will use a one-off built encryption key that is created locally.
 
@@ -56,7 +71,7 @@ This will then generate a .tar.gz tarball as described above, additionally with 
 In addition to the _.tar.gz_ tarball, an encryption key is now generated. The encryption key must be placed in the same directory as the extracted collector tarball for it to execute. If the tarball is being sent to someone else, it is recommeneded to send the encryption key via a different (and preferably secured) medium.
 
 
-# Storing Encryption keys within the AWS Secrets Manager
+## Storing Encryption keys within the AWS Secrets Manager
 The collector build process also supports storing and retrieving keys from the AWS secrets manager, to use this feature, 2 additional environment variables must be provided before the script is run.
 
 ```bash
@@ -76,6 +91,3 @@ When the collector is built, it will also upload the generated encryption key to
 Please be careful with the encryption keys. They should only be stored in a secure vault (such as the AWS Secrets Manager), and temporarily on the jumpbox or bastion where and while the collector script is being executed. The encryption key ensures the diagnostic snapshots are secured when transferred over the network and stored in the AWS S3 bucket.
 
 
-# Executing the Collector Script against a Cluster
-
-Instructions for execution of the Collector script are found in `ds-collector/README.md`. These instructions are also bundled into the built collector tarball.

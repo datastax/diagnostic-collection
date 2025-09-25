@@ -3,8 +3,11 @@ Diagnostic Collector for Apache Cassandra&trade;, DSE&trade;, HCD&trade;, …
 
 The Diagnostic Collector bundle is used to collect diagnostic snapshots (support bundles) over all nodes in an Apache Cassandra, or Cassandra based product, cluster.
 
-It can be run on Linux or Mac server that has ssh/docker/k8s access to the nodes in the cluster. It cannot be directly run on a node in the cluster.
+It can be run on Linux or Mac server (jumpbox or bastion) that has ssh/docker/k8s access to the nodes in the cluster.
 
+Download the latest `ds-collector.GENERIC-*.tar.gz` release from the [releases page](https://github.com/datastax/diagnostic-collection/releases).
+
+This `ds-collector*.tar.gz` tarball is then extracted on the jumpbox or bastion.
 
 
 Quick Start
@@ -16,9 +19,6 @@ Just do it, the following instructions ​work for most​ people.
 # extract the bundle on the jumpbox/bastion server (this cannot be a Cassandra node)
 tar -xvf ds-collector.*.tar.gz
 cd collector
-
-# if an encryption file has been provided, copy it to this folder
-cp <some-path>/*_secret.key .
 
 # go through the configuration file, set all parameters as suited
 edit collector.conf

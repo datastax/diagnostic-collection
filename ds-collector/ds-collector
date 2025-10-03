@@ -1293,7 +1293,10 @@ elif [ $testMode ]; then
 elif [ $executeMode ]; then
   bastion_checks
   # Delete existing artifacts before we generate new ones
-  rm -f $baseDir/*.tar.gz
+  # Unless we runOnSingleNode=true
+  if [[ "${runOnSingleNode}" != "true" ]] ; then
+    rm -f $baseDir/*.tar.gz
+  fi
   get_infos
   bucket_dump
   exit $?

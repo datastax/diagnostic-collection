@@ -190,6 +190,12 @@ cqlsh_port=9042
 # Note, unreachable nodes are automatically ignored.
 #skipNodes=""
 
+# Where will collection tarballs (and log file) be saved on the bastion
+#bastionBaseDir="/tmp/datastax"
+
+# Where will collector be copied to and the collection tarball be saved on each node
+#baseDir="/tmp/datastax"
+
 
 # Limit collection of log files to those with a modified timestamp newer than $logsMaxAgeDays days
 # By default we collect all log files newer than two months old to ensure thorough discovery analysis of nodes,
@@ -199,4 +205,3 @@ cqlsh_port=9042
 # Some deployments are tens to hundreds of GBs of logs kept on nodes, and this can become unweldly to upload.
 #  When needed set to reduce to manageable size.
 #logsMaxAgeDays=61
-

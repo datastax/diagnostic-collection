@@ -21,7 +21,7 @@ ${TESTS}: test_%:
 	./collector/ds-collector -T -p -f /tmp/datastax/test-collector-dse-k8s.conf -n cluster2-dc1-default-sts-0
 	./collector/ds-collector -X -f /tmp/datastax/test-collector-dse-k8s.conf -n cluster2-dc1-default-sts-0
 	if ! ls /tmp/datastax/ | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the K8s cluster "; ls -l /tmp/datastax/ ; exit 1 ; fi
-	for f in $(ls /tmp/datastax/*.tar.gz) ; do if ! tar -xf $f ; then echo "Failed to untar artefact $f in the K8s cluster " ; exit 1 ; fi ; done
+	for f in $$(ls /tmp/datastax/ | grep ".tar.gz") ; do if ! tar -xf /tmp/datastax/$$f ; then echo "Failed to untar artefact $$f in the k8s cluster " ; exit 1 ; fi ; done
 
 
 setup:

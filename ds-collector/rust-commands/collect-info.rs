@@ -50,6 +50,7 @@ fn main() {
         artifact_dir: &args[2],
         skip_sudo: bool::from_str(&env::var("skipSudo").unwrap_or("false".to_string())).unwrap(),
         log_home: &env::var("logHome").unwrap_or("/var/log/cassandra".to_string()),
+        logs_max_age_days: &env::var("logsMaxAgeDays").unwrap_or("".to_string()),
         data_dir: &env::var("data_dir").unwrap_or("".to_string()),
         config_home: &env::var("configHome").unwrap_or("/etc/cassandra".to_string()),
         cassandra_pid: &args[1],
@@ -217,6 +218,7 @@ fn format_command(cmd: &str, options: &Options) -> String {
 fn format_args(args: &str, options: &Options, mask: bool) -> String {
     args.replace("{artifact_dir}", options.artifact_dir)
         .replace("{log_home}", options.log_home)
+        .replace("{logs_max_age_days}", options.logs_max_age_days)
         .replace("{data_dir}", options.data_dir)
         .replace("{config_home}", options.config_home)
         .replace("{cassandra_pid}", options.cassandra_pid)
@@ -297,6 +299,7 @@ struct Options<'a> {
     artifact_dir: &'a str,
     skip_sudo: bool,
     log_home: &'a str,
+    logs_max_age_days: &'a str,
     config_home: &'a str,
     data_dir: &'a str,
     cassandra_pid: &'a str,
@@ -764,7 +767,7 @@ const COMMANDS: &[Cmd<'static>] = &[
     // cp -r $logHome/* $artifactSubDir/.
     Cmd {
         command: "{base_dir}/etc/cpReadable.sh",
-        args: "{log_home} {artifact_dir}/logs",
+        args: "{log_home} {artifact_dir}/logs {logs_max_age_days}",
         file: "",
         optional: false,
         skip_flags: "",

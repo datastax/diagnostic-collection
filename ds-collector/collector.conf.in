@@ -191,3 +191,12 @@ cqlsh_port=9042
 #skipNodes=""
 
 
+# Limit collection of log files to those with a modified timestamp newer than $logsMaxAgeDays days
+# By default we collect all log files newer than two months old to ensure thorough discovery analysis of nodes,
+#  particularly for issues on background tasks like repairs and past operator initiated faults.
+# Setting to empty string will disable this and collect all log files regardless of age.
+#
+# Some deployments are tens to hundreds of GBs of logs kept on nodes, and this can become unweldly to upload.
+#  When needed set to reduce to manageable size.
+#logsMaxAgeDays=61
+

@@ -167,11 +167,11 @@ list_cassandra_nodes_client() {
 
     # more accurate disk space check
     node_count="${#cassandraNodes[@]}"
-    required_basedir_space="$((${node_count} * 500000))"
+    required_bastionBaseDir_space="$((${node_count} * 500000))"
     # detect if df supports --portability
     DF_OPT=""
     ( ( df --help 2>/dev/null ) | grep -q "\-\-portability" ) && DF_OPT="--portability"
-    [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge ${required_basedir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_basedir_space} / 1000000))GB free at $baseDir"; exit 1; }
+    [ $(df $DF_OPT "${bastionBaseDir}" | tail -n +2 | awk '{print $4}') -ge ${required_bastionBaseDir_space} ] ||  { echo >&2 "A diagnostic collection of ${node_count} nodes requires at least $((${required_bastionBaseDir_space} / 1000000))GB free at ${bastionBaseDir}"; exit 1; }
 
     # also grab the cluster name
     cmd="set -o pipefail ; ${pathCommand} ${nodetoolCmd} -h ${jmxHost} -p ${jmxPort} ${jmxOpts} ${nodetoolCredentials} describecluster"
@@ -277,9 +277,9 @@ node_connect_ssh() {
 bastion_checks() {
   echo "version: ${git_branch} ${git_sha}"
   # pre-conditions
-  mkdir -p $baseDir
+  mkdir -p ${bastionBaseDir}
   if [ "$?" != "0" ]; then
-    echo "we couldn't make our working directory: $baseDir...exiting"
+    echo "we couldn't make our working directory: ${bastionBaseDir}...exiting"
     exit 2
   fi
   command -v ip >/dev/null 2>&1 || command -v ifconfig >/dev/null 2>&1 || { echo >&2 "ip or ifconfig needs to be installed"; exit 1; }
@@ -306,7 +306,7 @@ bastion_checks() {
   # detect if df supports --portability
   DF_OPT=""
   ( ( df --help 2>/dev/null ) | grep -q "\-\-portability" ) && DF_OPT="--portability"
-  [ $(df $DF_OPT "$baseDir" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at $baseDir"; exit 1; }
+  [ $(df $DF_OPT "${bastionBaseDir}" | tail -n +2 | awk '{print $4}') -ge 1000000 ] ||  { echo >&2 "There must be at least 1GB free at ${bastionBaseDir}"; exit 1; }
   # revert the prometheus jarfile from text back to jarfile
   [[ -f "${script_directory}/${prometheus}" ]] || command -v xxd >/dev/null 2>&1 || { echo >&2 "xxd needs to be installed"; exit 1; }
   [[ -f "${script_directory}/${prometheus/jar/txt}" ]] || [[ -f "${script_directory}/${prometheus}" ]] || { echo >&2 "${prometheus/jar/txt} or ${prometheus} needs to be in the collector directory ${script_directory}"; exit 1; }
@@ -349,7 +349,7 @@ print_status_state() {
 # shellcheck disable=SC2086
 bucket_dump() {
   unset -v artifacts
-  artifacts=($baseDir/*artifacts*.tar.gz)
+  artifacts=(${bastionBaseDir}/*artifacts*.tar.gz)
 
   timestamp=$(date -u +"%Y-%m-%dT%H%M%S")
 
@@ -358,10 +358,10 @@ bucket_dump() {
     baseMessage="processing artifact $artifact"
     encrypt_artifact "${artifact}"
     if [ "$skipS3" != "true" ]; then
-      s3_push_artifact "${baseDir}/${artifact}" "${timestamp}"
+      s3_push_artifact "${bastionBaseDir}/${artifact}" "${timestamp}"
       if [ "$statusState" = "0" ]; then
         if [ "$keepArtifact" != "true" ]; then
-          rm ${baseDir}/${artifact}
+          rm ${bastionBaseDir}/${artifact}
         fi
       else
         echo "upload of ${artifact} failed"
@@ -496,7 +496,7 @@ create_complete_marker() {
   else
     completeFileName="collector_upload.incomplete"
   fi
-  completeFilePath="${baseDir}/${completeFileName}"
+  completeFilePath="${bastionBaseDir}/${completeFileName}"
   echo "Expected ${artifact_count} artifacts. Cluster has ${node_count} nodes." > "${completeFilePath}"
   echo "----" >> "${completeFilePath}"
   for hostName in ${cassandraNodes} ; do
@@ -872,7 +872,7 @@ discover_jmx() {
 
 archive_artifacts() {
   baseMessage="archiving current artifacts"
-  cd "$baseDir"
+  cd "${baseDir}"
   if [ "$skipSudo" != "true" ]; then
     sudo chown -R "$(whoami)" "$artifactDir"
   fi
@@ -911,7 +911,7 @@ halp() {
     -d                      Run script on a single node only, disabling auto discovery when the -n
                               option specifies a hostname or IP address. Can only be used with
                               Test Mode and Execute Mode.
-    -v                      Verbose mode. Also captures console stdout to a log file under ${baseDir}
+    -v                      Verbose mode. Also captures console stdout to a log file under ${bastionBaseDir}
     -h                      Print this help and exit.
 
     modes:
@@ -1001,21 +1001,21 @@ node_pull() {
 }
 
 node_pull_docker() {
-  docker cp "$hostName:$1" "$baseDir/."
+  docker cp "$hostName:$1" "${bastionBaseDir}/."
   statusState=$?
   print_status_state
   return $statusState
 }
 
 node_pull_k8s() {
-  kubectl -n "$k8s_namespace" cp "$hostName:$1" $k8s_container_name_opt "$baseDir/$(basename $1)"
+  kubectl -n "$k8s_namespace" cp "$hostName:$1" $k8s_container_name_opt "${bastionBaseDir}/$(basename $1)"
   statusState=$?
   print_status_state
   return $statusState
 }
 
 node_pull_ssh() {
-  scp_command="scp $scpArgs $userName@${hostName}:${1} $baseDir/."
+  scp_command="scp $scpArgs $userName@${hostName}:${1} ${bastionBaseDir}/."
   if [ -n "$sshPassword" ]; then
     export SSHPASS="${sshPassword}"
     scp_command="sshpass -e $scp_command"
@@ -1166,7 +1166,7 @@ get_info() {
 script_directory=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 date=$(date -u +'%Y_%m_%d_%H%M_%s')
 baseDir="/tmp/datastax"
-artifactDir="$baseDir/$(hostname)_artifacts_$date"
+bastionBaseDir="/tmp/datastax"
 artifactFile="latest_artifacts.txt"
 
 # 'timeout --foreground' option is not supported on RHEL 6
@@ -1289,6 +1289,8 @@ if [ "$configFile" ]; then
     read_config;
 fi
 
+artifactDir="${baseDir}/$(hostname)_artifacts_$date"
+
 set_ssh_options
 set_scp_options
 
@@ -1304,7 +1306,7 @@ set_scp_options
 
 if [ $verbose ] ; then
   bastion_checks
-  logFile="${baseDir}/ds-collector-$(date -u +'%Y-%m-%d-%H-%M-%s').log"
+  logFile="${bastionBaseDir}/ds-collector-$(date -u +'%Y-%m-%d-%H-%M-%s').log"
   echo "debugging to ${logFile}"
   ( exec $0 ${@/-v/-x} )  2>&1  | sed "s/${jmxPassword:-\*\*\*\*}/****/g" | sed "s/${cqlshPassword:-\*\*\*\*}/****/g" | tee "${logFile}"
   exit $?
@@ -1315,7 +1317,7 @@ elif [ $testMode ]; then
 elif [ $executeMode ]; then
   bastion_checks
   # Delete existing artifacts before we generate new ones
-  rm -f $baseDir/*.tar.gz
+  rm -f ${bastionBaseDir}/*.tar.gz
   get_infos
   bucket_dump
   exit $?

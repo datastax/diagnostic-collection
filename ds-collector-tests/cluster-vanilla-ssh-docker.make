@@ -16,17 +16,17 @@ ${TESTS_SSH}: test_ssh_%:
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -T -p -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -X -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
-	# test archives exist
-	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
-	for f in $(ls /tmp/datastax/*.tar.gz) ; do if ! tar -xf $f ; then echo "Failed to untar artefact $f in the ssh cluster " ; exit 1 ; fi ; done
+	# test ssh archives exist
+	if ! ( docker exec ds-collector-tests_bastion_1 ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/ ) ; exit 1 ; fi
+	for f in $$(ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax") | grep ".tar.gz") ; do if ! tar -xf $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/$$f ; then echo "Failed to untar artefact $$f in the ssh cluster " ; exit 1 ; fi ; done
 	# ds-collector over SSH with verbose mode
 	@echo "\n  Testing SSH verbose $* \n"
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -T -p -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
 	docker exec -t ds-collector-tests_bastion_1 /collector/ds-collector -v -X -f /ds-collector-tests/$* -n ds-collector-tests_cassandra-00_1
-	# test archives exist
-	if ! ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls /tmp/datastax/ ) ; exit 1 ; fi
-	for f in $(ls /tmp/datastax/*.tar.gz) ; do if ! tar -xf $f ; then echo "Failed to untar artefact $f in the ssh cluster " ; exit 1 ; fi ; done
+	# test ssh verbose archives exist
+	if ! ( docker exec ds-collector-tests_bastion_1 ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/ ) | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the SSH cluster" ; ( docker exec ds-collector-tests_bastion_1 ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/ ) ; exit 1 ; fi
+	for f in $$(ls $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax") | grep ".tar.gz") ; do if ! tar -xf $$(grep -oP '^bastionBaseDir="\K[^"]+' $* || echo "/tmp/datastax")/$$f ; then echo "Failed to untar artefact $$f in the ssh cluster " ; exit 1 ; fi ; done
 
 ${TESTS_DOCKER}: test_docker_%:
 	# ds-collector over docker
@@ -38,9 +38,10 @@ ${TESTS_DOCKER}: test_docker_%:
 	./collector/ds-collector -T -f $* -n ds-collector-tests_cassandra-00_1
 	./collector/ds-collector -T -p -f $* -n ds-collector-tests_cassandra-00_1
 	./collector/ds-collector -X -f $* -n ds-collector-tests_cassandra-00_1
-	# test archives exist
+	# test docker archives exist
 	if ! ls /tmp/datastax/ | grep -q ".tar.gz" ; then echo "Failed to generate artefacts in the docker cluster " ; ls -l /tmp/datastax/ ; exit 1 ; fi
-	for f in $(ls /tmp/datastax/*.tar.gz) ; do if ! tar -xf $f ; then echo "Failed to untar artefact $f in the ssh cluster " ; exit 1 ; fi ; done
+	# a non-root user on the host might not be able to untar special files, so just list the tarfile contents instead
+	for f in $$(ls /tmp/datastax/ | grep ".tar.gz") ; do if ! tar -tf  /tmp/datastax/$$f ; then echo "Failed to untar artefact $$f in the docker cluster " ; exit 1 ; fi ; done
 	
 
 setup:

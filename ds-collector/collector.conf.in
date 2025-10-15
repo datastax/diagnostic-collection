@@ -187,4 +187,9 @@ cqlsh_port=9042
 # Note, unreachable nodes are automatically ignored.
 #skipNodes=""
 
+# Where will collection tarballs (and log file) be saved on the bastion
+#bastionBaseDir="/tmp/datastax"
 
+
+# Where will collector be copied to and the collection tarball be saved on each node
+#baseDir="/tmp/datastax"

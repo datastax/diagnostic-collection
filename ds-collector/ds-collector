@@ -512,6 +512,7 @@ collect_via_rust() {
   baseMessage="calling collect-info"
   export baseDir
   export logHome
+  export logsMaxAgeDays
   export data_dir=${cassandra_data_dir//,/ }
   export configHome
   export skipSudo="${skipSudo:-false}"
@@ -1157,6 +1158,7 @@ targetFile=$(basename $0)
 
 # base cassandra
 logHome="/var/log/cassandra"
+logsMaxAgeDays=61
 #dataHome="/var/lib/cassandra/data"
 
 # expected base ssh options

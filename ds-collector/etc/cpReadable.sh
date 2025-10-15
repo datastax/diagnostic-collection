@@ -13,6 +13,7 @@ exit 1
 
 sourceDir=$1
 targetDir=$2
+maxAgeDays=$3
 
 if [ -z "${sourceDir}" -o -z "${targetDir}" ]; then
   _usage
@@ -29,8 +30,13 @@ if [ ! -d ${targetDir} ]; then
   fi
 fi
 
+findArgs=""
+if [ "x" != "x${maxAgeDays}" ]; then
+    findArgs="-mtime -${maxAgeDays}"
+fi
+
 rm -rf ${targetDir}
 mkdir -p ${targetDir}
 cd ${sourceDir}
 for DIR in $(find . -type d | sed 's|\.||;s|/||;/^$/d'); do mkdir -p ${targetDir}/$DIR; done
-for FILE in $(find . \( -type l -o -type f \) -readable | sed 's|\.||;s|/||;/^$/d'); do cp -f -L $FILE ${targetDir}/$FILE; done
+for FILE in $(find . \( -type l -o -type f \) -readable ${findArgs} | sed 's|\.||;s|/||;/^$/d'); do cp -f -L $FILE ${targetDir}/$FILE; done

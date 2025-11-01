@@ -145,9 +145,9 @@ list_cassandra_nodes_client() {
     node_connect "chmod +x \"${baseDir}/$targetFile\""
 
     if [ "$sudo_script_on_node" ]; then
-      cassandraNodes=$(node_connect "sudo ${baseDir}/${targetFile} -L" | tr "\n\r" " ")
+      cassandraNodes=$(node_connect "sudo ${baseDir}/${targetFile} -L -f ${baseDir}/${configFile}" | tr "\n\r" " ")
     else
-      cassandraNodes=$(node_connect "${baseDir}/${targetFile} -L" | tr "\n\r" " ")
+      cassandraNodes=$(node_connect "${baseDir}/${targetFile} -L -f ${baseDir}/${configFile}" | tr "\n\r" " ")
     fi
     statusState=$?
   fi
@@ -1053,7 +1053,8 @@ read_config() {
     echo "config file $configPath was not found...exiting"
     statusState=2
   fi
-  print_status_state
+  # silent when in listNodesMode
+  [ $listNodesMode ] || print_status_state
   if [ "$statusState" != "0" ]; then exit $statusState; fi
 }
 

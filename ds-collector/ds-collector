@@ -1065,6 +1065,7 @@ get_infos() {
     while read -u10 hostName; do
       if [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
         get_info
+        cassandraNodes="${cassandraNodes} ${hostName}"
       fi
     done 10< $hostFile
   elif [[ ${runOnSingleNode} != "true" ]] && [[ "$hostName" != \#* ]] && [ "$hostName" ]; then
